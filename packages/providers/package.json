@@ -1,0 +1,23 @@
+{
+  "name": "@ai-council/providers",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "dependencies": {
+    "@ai-council/shared": "*",
+    "@anthropic-ai/sdk": "^0.68.0",
+    "@google/genai": "^1.0.0",
+    "openai": "^6.9.0"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0"
+  }
+}
