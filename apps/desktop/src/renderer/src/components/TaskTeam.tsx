@@ -1,6 +1,7 @@
 import CouncilUsage from './CouncilUsage'
 import type { CouncilCallUsage } from '@ai-council/council-core'
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { ProviderId } from '@ai-council/shared'
 import { PROVIDER_LABELS } from '@ai-council/shared'
 import type { CouncilRunEvent } from '@ai-council/council-core'
@@ -18,11 +19,12 @@ interface StepResult {
 }
 
 export default function TaskTeam({ settings }: { settings: SettingsState }): React.JSX.Element {
+  const { t } = useTranslation()
   const [prompt, setPrompt] = useState('')
   const [attachments, setAttachments] = useState<AttachedArtifact[]>([])
   const [steps, setSteps] = useState<TeamStepDto[]>([
-    { provider: 'anthropic', roleInstruction: 'Erstelle einen ersten Entwurf.' },
-    { provider: 'openai', roleInstruction: 'Überarbeite und verbessere den Entwurf.' }
+    { provider: 'anthropic', roleInstruction: t('taskTeam.defaultStep1') },
+    { provider: 'openai', roleInstruction: t('taskTeam.defaultStep2') }
   ])
   const [running, setRunning] = useState(false)
   const [usage, setUsage] = useState<CouncilCallUsage[]>([])
@@ -92,9 +94,7 @@ export default function TaskTeam({ settings }: { settings: SettingsState }): Rea
       // was picked for two steps) - without this, "Läuft…" was left stuck
       // forever with no explanation.
       setRunning(false)
-      setStartError(
-        'Team-Lauf konnte nicht gestartet werden - vermutlich wurde derselbe Anbieter mehrfach als Schritt ausgewählt.'
-      )
+      setStartError(t('taskTeam.startFailed'))
       return
     }
     currentRunId.current = runId
@@ -110,11 +110,11 @@ export default function TaskTeam({ settings }: { settings: SettingsState }): Rea
       <CouncilUsage calls={usage} />
       <div className="panel">
         <div className="field">
-          <label>Ausgangsaufgabe</label>
+          <label>{t('taskTeam.startingTaskLabel')}</label>
           <textarea
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
-            placeholder="z.B. Entwickle ein Konzept für die nächste Produktfeature-Ankündigung."
+            placeholder={t('taskTeam.startingTaskPlaceholder')}
           />
         </div>
         <div className="field">
@@ -127,13 +127,13 @@ export default function TaskTeam({ settings }: { settings: SettingsState }): Rea
         {steps.map((step, i) => (
           <div key={i} className="team-step">
             <div className="team-step-header">
-              <span className="badge">Schritt {i + 1}</span>
+              <span className="badge">{t('taskTeam.stepLabel', { step: i + 1 })}</span>
               <button className="link" onClick={() => removeStep(i)}>
-                entfernen
+                {t('taskTeam.removeStep')}
               </button>
             </div>
             <div className="field">
-              <label>Wer übernimmt diesen Schritt?</label>
+              <label>{t('taskTeam.whoTakesStep')}</label>
               <select
                 value={step.provider}
                 onChange={(e) => updateStep(i, { provider: e.target.value as ProviderId })}
@@ -146,11 +146,11 @@ export default function TaskTeam({ settings }: { settings: SettingsState }): Rea
               </select>
             </div>
             <div className="field" style={{ marginBottom: 0, whiteSpace: 'pre-line' }}>
-              <label>Rolle / Anweisung</label>
+              <label>{t('taskTeam.roleInstructionLabel')}</label>
               <textarea
                 value={step.roleInstruction}
                 onChange={(e) => updateStep(i, { roleInstruction: e.target.value })}
-                placeholder="z.B. Recherchiere Fakten zum Thema."
+                placeholder={t('taskTeam.roleInstructionPlaceholder')}
               />
             </div>
             {results[i] && (
@@ -158,14 +158,14 @@ export default function TaskTeam({ settings }: { settings: SettingsState }): Rea
                 <div className="result-header">
                   <span className={`provider-dot dot-${step.provider}`} />
                   {PROVIDER_LABELS[step.provider]}
-                  {!results[i].done && <span className="status-neutral">läuft…</span>}
+                  {!results[i].done && <span className="status-neutral">{t('taskTeam.runningShort')}</span>}
                 </div>
                 <div className="result-body" style={{ maxHeight: 260 }}>
                   {results[i].warning && <div className="error-text">⚠ {results[i].warning}</div>}
                   {results[i].error ? (
                     <span className="error-text">{results[i].error}</span>
                   ) : (
-                    results[i].text || <span className="status-neutral">Warte…</span>
+                    results[i].text || <span className="status-neutral">{t('taskTeam.waiting')}</span>
                   )}
                 </div>
               </div>
@@ -175,12 +175,12 @@ export default function TaskTeam({ settings }: { settings: SettingsState }): Rea
 
         <div className="row" style={{ justifyContent: 'space-between', marginTop: 16 }}>
           <button className="secondary" onClick={addStep}>
-            + Schritt hinzufügen
+            {t('taskTeam.addStep')}
           </button>
           <div className="row">
             {running && (
               <button className="secondary" onClick={cancel}>
-                Abbrechen
+                {t('taskTeam.cancel')}
               </button>
             )}
             <button
@@ -188,7 +188,7 @@ export default function TaskTeam({ settings }: { settings: SettingsState }): Rea
               onClick={run}
               disabled={running || !prompt.trim() || steps.length === 0}
             >
-              {running ? 'Läuft…' : 'Team starten'}
+              {running ? t('taskTeam.running') : t('taskTeam.startTeam')}
             </button>
           </div>
         </div>

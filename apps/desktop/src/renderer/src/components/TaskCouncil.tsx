@@ -1,6 +1,7 @@
 import CouncilUsage from './CouncilUsage'
 import type { CouncilCallUsage } from '@ai-council/council-core'
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { ProviderId } from '@ai-council/shared'
 import { PROVIDER_LABELS } from '@ai-council/shared'
 import type { CouncilRunEvent, CouncilStage } from '@ai-council/council-core'
@@ -9,11 +10,11 @@ import AttachmentPicker from '../AttachmentPicker'
 import CompanyTruthToggle from '../CompanyTruthToggle'
 
 const ALL_PROVIDERS: ProviderId[] = ['anthropic', 'openai', 'gemini']
-const STAGE_TITLES: Record<CouncilStage, string> = {
-  independent: 'Runde 1 – Unabhängige Antworten',
-  critique: 'Runde 2 – Kritik (anonymisiert)',
-  revision: 'Runde 3 – Überarbeitung',
-  synthesis: 'Runde 4 – Synthese'
+const STAGE_TITLE_KEYS: Record<CouncilStage, string> = {
+  independent: 'taskCouncil.stageIndependent',
+  critique: 'taskCouncil.stageCritique',
+  revision: 'taskCouncil.stageRevision',
+  synthesis: 'taskCouncil.stageSynthesis'
 }
 
 interface EntryState {
@@ -27,6 +28,7 @@ interface EntryState {
 type StageState = Partial<Record<ProviderId, EntryState>>
 
 export default function TaskCouncil({ settings }: { settings: SettingsState }): React.JSX.Element {
+  const { t } = useTranslation()
   const [prompt, setPrompt] = useState('')
   const [attachments, setAttachments] = useState<AttachedArtifact[]>([])
   const [selected, setSelected] = useState<ProviderId[]>(ALL_PROVIDERS)
@@ -106,7 +108,7 @@ export default function TaskCouncil({ settings }: { settings: SettingsState }): 
     })
     if (!runId) {
       setRunning(false)
-      setStartError(error ?? 'Rat konnte nicht einberufen werden.')
+      setStartError(error ?? t('taskCouncil.startFailed'))
       return
     }
     currentRunId.current = runId
@@ -122,11 +124,11 @@ export default function TaskCouncil({ settings }: { settings: SettingsState }): 
       <CouncilUsage calls={usage} />
       <div className="panel">
         <div className="field">
-          <label>Aufgabe für den Rat</label>
+          <label>{t('taskCouncil.taskLabel')}</label>
           <textarea
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
-            placeholder="z.B. Sollten wir eine native iOS-App für §34a Sachkunde PRO entwickeln?"
+            placeholder={t('taskCouncil.taskPlaceholder')}
           />
         </div>
         <div className="field">
@@ -153,11 +155,11 @@ export default function TaskCouncil({ settings }: { settings: SettingsState }): 
                 onChange={(e) => setAllowSingleParticipant(e.target.checked)}
                 style={{ width: 'auto' }}
               />
-              Nur 1 Teilnehmer erlauben (Smoke-Test)
+              {t('taskCouncil.allowSingleParticipant')}
             </label>
           </div>
           <div className="row">
-            <label style={{ margin: 0 }}>Vorsitz:</label>
+            <label style={{ margin: 0 }}>{t('taskCouncil.chairLabel')}</label>
             <select value={chairId} onChange={(e) => setChairId(e.target.value as ProviderId)} style={{ width: 140 }}>
               {selected.map((p) => (
                 <option key={p} value={p}>
@@ -169,19 +171,19 @@ export default function TaskCouncil({ settings }: { settings: SettingsState }): 
           <div className="row">
             {running && (
               <button className="secondary" onClick={cancel}>
-                Abbrechen
+                {t('taskCouncil.cancel')}
               </button>
             )}
             <button className="primary" onClick={run} disabled={running || !canRun}>
-              {running ? 'Läuft…' : 'Rat einberufen'}
+              {running ? t('taskCouncil.running') : t('taskCouncil.convene')}
             </button>
           </div>
         </div>
         {selected.length < minimumParticipants && (
           <p className="status-neutral" style={{ marginBottom: 0, whiteSpace: 'pre-line' }}>
             {allowSingleParticipant
-              ? 'Mindestens 1 Anbieter auswählen.'
-              : 'Mindestens 2 Anbieter auswählen – sonst gibt es niemanden zu kritisieren.'}
+              ? t('taskCouncil.minOneProvider')
+              : t('taskCouncil.minTwoProviders')}
           </p>
         )}
         {startError && (
@@ -197,7 +199,7 @@ export default function TaskCouncil({ settings }: { settings: SettingsState }): 
         return (
           <div key={stage} style={{ marginTop: 20 }}>
             <h3 style={{ margin: '0 0 10px', fontSize: 14, color: 'var(--text-muted)' }}>
-              {STAGE_TITLES[stage]}
+              {t(STAGE_TITLE_KEYS[stage])}
             </h3>
             <div className="columns">
               {entries.map(([providerId, entry]) => (
@@ -210,19 +212,19 @@ export default function TaskCouncil({ settings }: { settings: SettingsState }): 
                         {entry.label}
                       </span>
                     )}
-                    {!entry.done && <span className="status-neutral">läuft…</span>}
+                    {!entry.done && <span className="status-neutral">{t('taskCouncil.runningShort')}</span>}
                   </div>
                   <div className="result-body">
                     {entry.warning && <div className="error-text">⚠ {entry.warning}</div>}
                     {entry.error ? (
                       <>
-                        <div className="error-text">⚠ Dieser Teilnehmer ist ausgefallen: {entry.error}</div>
+                        <div className="error-text">⚠ {t('taskCouncil.participantFailed', { error: entry.error })}</div>
                         <div className="status-neutral" style={{ fontSize: 12, marginTop: 4 }}>
-                          Die übrigen Teilnehmer laufen unabhängig weiter.
+                          {t('taskCouncil.othersContinue')}
                         </div>
                       </>
                     ) : (
-                      entry.text || <span className="status-neutral">Warte…</span>
+                      entry.text || <span className="status-neutral">{t('taskCouncil.waiting')}</span>
                     )}
                   </div>
                 </div>

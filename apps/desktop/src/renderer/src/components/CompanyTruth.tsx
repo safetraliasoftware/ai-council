@@ -1,8 +1,16 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { CompanyFact, CompanyFactCategory } from '../../../main/ipc-types'
 import { COMPANY_FACT_CATEGORY_LABELS } from '../../../main/ipc-types'
 
 const CATEGORIES = Object.keys(COMPANY_FACT_CATEGORY_LABELS) as CompanyFactCategory[]
+const CATEGORY_KEYS: Record<CompanyFactCategory, string> = {
+  PRODUCT_FACT: 'companyTruth.categoryProductFact',
+  TECH_FACT: 'companyTruth.categoryTechFact',
+  MARKETING_RULE: 'companyTruth.categoryMarketingRule',
+  LEGAL_RULE: 'companyTruth.categoryLegalRule',
+  DECISION: 'companyTruth.categoryDecision'
+}
 
 /**
  * Company Truth: standing facts/rules about the actual business, kept
@@ -13,6 +21,7 @@ const CATEGORIES = Object.keys(COMPANY_FACT_CATEGORY_LABELS) as CompanyFactCateg
  * with invented facts.
  */
 export default function CompanyTruth(): React.JSX.Element {
+  const { t } = useTranslation()
   const [facts, setFacts] = useState<CompanyFact[]>([])
   const [loading, setLoading] = useState(true)
   const [category, setCategory] = useState<CompanyFactCategory>('PRODUCT_FACT')
@@ -43,42 +52,40 @@ export default function CompanyTruth(): React.JSX.Element {
     <div>
       <div className="panel">
         <p style={{ color: 'var(--text-muted)', marginTop: 0 }}>
-          Feste Fakten und Regeln über dein Unternehmen (Produkt, Technik, Marketing, Recht, Entscheidungen) –
-          unabhängig von einer einzelnen Konversation. Optional in Vergleichen/Team/Council einbeziehbar,
-          damit alle Anbieter von denselben Fakten ausgehen, statt sich zu widersprechen.
+          {t('companyTruth.intro')}
         </p>
 
         <div className="field">
-          <label>Kategorie</label>
+          <label>{t('companyTruth.categoryLabel')}</label>
           <select value={category} onChange={(e) => setCategory(e.target.value as CompanyFactCategory)} style={{ width: 260 }}>
             {CATEGORIES.map((c) => (
               <option key={c} value={c}>
-                {COMPANY_FACT_CATEGORY_LABELS[c]}
+                {t(CATEGORY_KEYS[c])}
               </option>
             ))}
           </select>
         </div>
 
         <div className="field">
-          <label>Fakt / Regel</label>
+          <label>{t('companyTruth.factLabel')}</label>
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder="z.B. §34a Sachkunde PRO hat keine native iOS-App."
+            placeholder={t('companyTruth.factPlaceholder')}
           />
         </div>
 
         <div className="row" style={{ justifyContent: 'flex-end' }}>
           <button className="primary" onClick={add} disabled={!text.trim()}>
-            Hinzufügen
+            {t('companyTruth.add')}
           </button>
         </div>
       </div>
 
       <div className="panel" style={{ marginTop: 16 }}>
-        {loading && <span className="status-neutral">Lädt…</span>}
+        {loading && <span className="status-neutral">{t('companyTruth.loading')}</span>}
         {!loading && facts.length === 0 && (
-          <span className="status-neutral">Noch keine Einträge – oben den ersten Fakt hinzufügen.</span>
+          <span className="status-neutral">{t('companyTruth.noEntries')}</span>
         )}
         {!loading &&
           CATEGORIES.map((c) => {
@@ -87,13 +94,13 @@ export default function CompanyTruth(): React.JSX.Element {
             return (
               <div key={c} style={{ marginBottom: 16 }}>
                 <h3 style={{ margin: '0 0 8px', fontSize: 14, color: 'var(--text-muted)' }}>
-                  {COMPANY_FACT_CATEGORY_LABELS[c]}
+                  {t(CATEGORY_KEYS[c])}
                 </h3>
                 {inCategory.map((f) => (
                   <div key={f.id} className="row" style={{ alignItems: 'flex-start', marginBottom: 6 }}>
                     <span style={{ flex: 1, fontSize: 13 }}>{f.text}</span>
                     <button className="secondary" onClick={() => remove(f.id)}>
-                      Löschen
+                      {t('companyTruth.delete')}
                     </button>
                   </div>
                 ))}

@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import type { AttachedArtifact, CodingLogEntry, HistoryListEntry, HistoryRunRecord } from '../../main/ipc-types'
 
 /**
@@ -18,9 +20,9 @@ export interface AttachmentPickerProps {
 
 const MAX_HISTORY_ARTIFACT_CHARS = 30000
 
-function truncate(text: string): string {
+function truncate(text: string, t: TFunction): string {
   if (text.length <= MAX_HISTORY_ARTIFACT_CHARS) return text
-  return text.slice(0, MAX_HISTORY_ARTIFACT_CHARS) + '\n\n[... gekürzt ...]'
+  return text.slice(0, MAX_HISTORY_ARTIFACT_CHARS) + '\n\n' + t('attachmentPicker.truncated')
 }
 
 function isText(entry: CodingLogEntry): entry is Extract<CodingLogEntry, { kind: 'text' }> {
@@ -28,44 +30,46 @@ function isText(entry: CodingLogEntry): entry is Extract<CodingLogEntry, { kind:
 }
 
 /** Turns a saved run-history record into an attachable artifact. */
-function formatHistoryArtifact(record: HistoryRunRecord): AttachedArtifact {
+function formatHistoryArtifact(record: HistoryRunRecord, t: TFunction): AttachedArtifact {
   if (record.kind === 'coding') {
-    const texts = record.logs.filter(isText).map((t) => t.text)
+    const texts = record.logs.filter(isText).map((entry) => entry.text)
     const done = record.logs.find((l): l is Extract<CodingLogEntry, { kind: 'done' }> => l.kind === 'done')
-    const body = texts.length > 0 ? texts.join('\n\n') : (done?.summary ?? '(keine Textantwort)')
+    const body = texts.length > 0 ? texts.join('\n\n') : (done?.summary ?? t('attachmentPicker.noTextResponse'))
     return {
-      label: `Coding-Lauf: ${record.prompt.slice(0, 60)}`,
-      text: truncate(`Aufgabe: ${record.prompt}\n\n${body}`)
+      label: t('attachmentPicker.codingRunLabel', { prompt: record.prompt.slice(0, 60) }),
+      text: truncate(`${t('attachmentPicker.taskLine', { task: record.prompt })}\n\n${body}`, t)
     }
   }
 
   const latestDiff = record.diffs.fix2 ?? record.diffs.fix ?? record.diffs.implement
   const diffText = latestDiff
-    ? `Geänderte Dateien: ${latestDiff.files.map((f) => `${f.path} (${f.status})`).join(', ')}\n\n${
-        latestDiff.diff.trim() || '(kein Inhalt-Diff)'
+    ? `${t('attachmentPicker.changedFiles', { files: latestDiff.files.map((f) => `${f.path} (${f.status})`).join(', ') })}\n\n${
+        latestDiff.diff.trim() || t('attachmentPicker.noDiffContent')
       }`
-    : '(kein Diff erfasst)'
-  const finalReviewText = (record.stages.finalReview ?? []).filter(isText).map((t) => t.text).join('\n\n')
+    : t('attachmentPicker.noDiffCaptured')
+  const finalReviewText = (record.stages.finalReview ?? []).filter(isText).map((entry) => entry.text).join('\n\n')
   const resultLine = record.finalResult.success
-    ? 'Abgeschlossen'
-    : `Gestoppt${record.finalResult.reason ? ': ' + record.finalResult.reason : ''}`
+    ? t('attachmentPicker.resultCompleted')
+    : t('attachmentPicker.resultStopped', { reason: record.finalResult.reason ? `: ${record.finalResult.reason}` : '' })
 
   return {
-    label: `Workflow-Lauf: ${record.task.slice(0, 60)}`,
+    label: t('attachmentPicker.workflowRunLabel', { task: record.task.slice(0, 60) }),
     text: truncate(
       [
-        `Aufgabe: ${record.task}`,
-        `Ergebnis: ${resultLine}`,
-        `--- Diff ---\n${diffText}`,
-        finalReviewText ? `--- Abschlussprüfung ---\n${finalReviewText}` : ''
+        t('attachmentPicker.taskLine', { task: record.task }),
+        t('attachmentPicker.resultLine', { result: resultLine }),
+        t('attachmentPicker.diffSection', { diff: diffText }),
+        finalReviewText ? t('attachmentPicker.finalReviewSection', { review: finalReviewText }) : ''
       ]
         .filter(Boolean)
-        .join('\n\n')
+        .join('\n\n'),
+      t
     )
   }
 }
 
 export default function AttachmentPicker({ attachments, onChange }: AttachmentPickerProps): React.JSX.Element {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [mode, setMode] = useState<'menu' | 'diff' | 'history'>('menu')
   const [diffDir, setDiffDir] = useState('')
@@ -105,7 +109,7 @@ export default function AttachmentPicker({ attachments, onChange }: AttachmentPi
     const result = await window.api.artifacts.captureDiff(diffDir)
     setBusy(false)
     if (result.ok && result.artifact) add(result.artifact)
-    else setMessage({ text: result.error ?? 'Diff konnte nicht erfasst werden.', neutral: result.noChanges })
+    else setMessage({ text: result.error ?? t('attachmentPicker.diffCaptureFailed'), neutral: result.noChanges })
   }
 
   const attachFile = async (): Promise<void> => {
@@ -132,7 +136,7 @@ export default function AttachmentPicker({ attachments, onChange }: AttachmentPi
   const attachFromHistory = async (id: string): Promise<void> => {
     const record = await window.api.history.get(id)
     if (!record) return
-    add(formatHistoryArtifact(record))
+    add(formatHistoryArtifact(record, t))
   }
 
   return (
@@ -156,7 +160,7 @@ export default function AttachmentPicker({ attachments, onChange }: AttachmentPi
       )}
 
       <button className="secondary" onClick={toggle}>
-        {open ? 'Anhang schließen' : 'Anhang hinzufügen'}
+        {open ? t('attachmentPicker.closeAttachment') : t('attachmentPicker.addAttachment')}
       </button>
 
       {open && (
@@ -164,13 +168,13 @@ export default function AttachmentPicker({ attachments, onChange }: AttachmentPi
           {mode === 'menu' && (
             <div className="row">
               <button className="secondary" onClick={() => setMode('diff')}>
-                Git-Diff
+                {t('attachmentPicker.gitDiff')}
               </button>
               <button className="secondary" onClick={attachFile} disabled={busy}>
-                Datei
+                {t('attachmentPicker.file')}
               </button>
               <button className="secondary" onClick={openHistory}>
-                Aus Verlauf
+                {t('attachmentPicker.fromHistory')}
               </button>
             </div>
           )}
@@ -182,18 +186,18 @@ export default function AttachmentPicker({ attachments, onChange }: AttachmentPi
                   type="text"
                   value={diffDir}
                   onChange={(e) => setDiffDir(e.target.value)}
-                  placeholder="C:\Pfad\zum\Projekt"
+                  placeholder={t('attachmentPicker.pathPlaceholder')}
                 />
                 <button className="secondary" onClick={pickDiffDir}>
-                  Durchsuchen…
+                  {t('attachmentPicker.browse')}
                 </button>
               </div>
               <div className="row" style={{ marginTop: 8 }}>
                 <button className="primary" onClick={captureDiff} disabled={busy || !diffDir.trim()}>
-                  {busy ? 'Lädt…' : 'Diff anhängen'}
+                  {busy ? t('attachmentPicker.loading') : t('attachmentPicker.attachDiff')}
                 </button>
                 <button className="secondary" onClick={() => setMode('menu')}>
-                  Zurück
+                  {t('attachmentPicker.back')}
                 </button>
               </div>
             </div>
@@ -201,9 +205,9 @@ export default function AttachmentPicker({ attachments, onChange }: AttachmentPi
 
           {mode === 'history' && (
             <div>
-              {historyLoading && <span className="status-neutral">Lädt…</span>}
+              {historyLoading && <span className="status-neutral">{t('attachmentPicker.loading')}</span>}
               {!historyLoading && historyList.length === 0 && (
-                <span className="status-neutral">Kein Verlauf vorhanden.</span>
+                <span className="status-neutral">{t('attachmentPicker.noHistory')}</span>
               )}
               {!historyLoading &&
                 historyList.map((h) => (
@@ -222,7 +226,7 @@ export default function AttachmentPicker({ attachments, onChange }: AttachmentPi
                   </div>
                 ))}
               <button className="secondary" onClick={() => setMode('menu')} style={{ marginTop: 8 }}>
-                Zurück
+                {t('attachmentPicker.back')}
               </button>
             </div>
           )}

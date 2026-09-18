@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { ProviderId } from '@ai-council/shared'
 import { PROVIDER_LABELS } from '@ai-council/shared'
 import type { ChangeRequest, ChangeRequestSeverity } from '@ai-council/project-domain'
@@ -6,11 +7,17 @@ import type { ChangeRequestEvaluatedEnvelope } from '../../../main/ipc-types'
 
 const ALL_PROVIDERS: ProviderId[] = ['anthropic', 'openai', 'gemini']
 const SEVERITIES: ChangeRequestSeverity[] = ['minor', 'architecture', 'security', 'compliance']
-const STATUS_LABELS: Record<ChangeRequest['status'], string> = {
-  pending: 'Wartet auf Vorschlag',
-  council_approved: 'Vom Rat bewertet – wartet auf Entscheidung',
-  human_approved: 'Genehmigt',
-  rejected: 'Abgelehnt'
+const SEVERITY_KEYS: Record<ChangeRequestSeverity, string> = {
+  minor: 'changeRequests.severityMinor',
+  architecture: 'changeRequests.severityArchitecture',
+  security: 'changeRequests.severitySecurity',
+  compliance: 'changeRequests.severityCompliance'
+}
+const STATUS_KEYS: Record<ChangeRequest['status'], string> = {
+  pending: 'changeRequests.statusPending',
+  council_approved: 'changeRequests.statusCouncilApproved',
+  human_approved: 'changeRequests.statusHumanApproved',
+  rejected: 'changeRequests.statusRejected'
 }
 
 interface ChangeRequestsProps {
@@ -38,6 +45,7 @@ interface ChangeRequestsProps {
  * back here to link the resulting version once it's approved.
  */
 export default function ChangeRequests({ projectId, taskId, onChanged, onRequestSpecRevision }: ChangeRequestsProps): React.JSX.Element | null {
+  const { t } = useTranslation()
   const [requests, setRequests] = useState<ChangeRequest[]>([])
   const [drafts, setDrafts] = useState<Record<string, { proposedChanges: string; severity: ChangeRequestSeverity }>>({})
   const [linkVersion, setLinkVersion] = useState<Record<string, string>>({})
@@ -104,7 +112,7 @@ export default function ChangeRequests({ projectId, taskId, onChanged, onRequest
 
   const evaluate = async (id: string): Promise<void> => {
     if (currentEvaluationId.current) return
-    if (!effectiveChairId) { setError('Bitte mindestens einen Teilnehmer auswählen.'); return }
+    if (!effectiveChairId) { setError(t('changeRequests.selectAtLeastOne')); return }
     const draft = drafts[id]
     if (!draft) return
     currentEvaluationId.current = id
@@ -112,7 +120,7 @@ export default function ChangeRequests({ projectId, taskId, onChanged, onRequest
     setError('')
     try {
       const { runId } = await window.api.changeRequest.evaluate({ projectId, id, providers: selected, chairId: effectiveChairId, proposal: { ...draft } })
-      if (!runId) throw new Error('Bewertung konnte nicht gestartet werden.')
+      if (!runId) throw new Error(t('changeRequests.evaluationStartFailed'))
     } catch (err) {
       currentEvaluationId.current = ''
       setEvaluating(null)
@@ -124,9 +132,9 @@ export default function ChangeRequests({ projectId, taskId, onChanged, onRequest
 
   return (
     <section style={{ marginTop: 16 }}>
-      <h3 style={{ margin: '0 0 8px', fontSize: 15 }}>Änderungsanfrage{requests.length > 1 ? 'n' : ''} zu diesem Task</h3>
+      <h3 style={{ margin: '0 0 8px', fontSize: 15 }}>{requests.length > 1 ? t('changeRequests.headingPlural') : t('changeRequests.headingSingular')}</h3>
       {error && <p className="error-text">{error}</p>}
-      {applying && <button onClick={() => void window.api.taskGraph.abortTask(projectId, '').catch(err => setError(String(err)))}>Ersatz-Task-Erstellung abbrechen</button>}
+      {applying && <button onClick={() => void window.api.taskGraph.abortTask(projectId, '').catch(err => setError(String(err)))}>{t('changeRequests.abortReplacementTask')}</button>}
       <div className="row" style={{ marginBottom: 8 }}>
         {ALL_PROVIDERS.map((p) => (
           <label key={p} style={{ display: 'flex', alignItems: 'center', gap: 6, margin: 0 }}>
@@ -141,7 +149,7 @@ export default function ChangeRequests({ projectId, taskId, onChanged, onRequest
           </label>
         ))}
         <label style={{ margin: 0 }}>
-          Vorsitz:
+          {t('changeRequests.chairLabel')}
           <select disabled={evaluating !== null} value={effectiveChairId ?? ''} onChange={(e) => setChairId(e.target.value as ProviderId)} style={{ width: 140, marginLeft: 6 }}>
             {selected.map((p) => (
               <option key={p} value={p}>
@@ -157,25 +165,25 @@ export default function ChangeRequests({ projectId, taskId, onChanged, onRequest
         return (
           <div key={cr.id} className="result-card" style={{ marginBottom: 8, minHeight: 0 }}>
             <div className="result-header">
-              <span className="badge">{STATUS_LABELS[cr.status]}</span>
-              {cr.resultingSpecVersion && <span className="badge">→ Spec v{cr.resultingSpecVersion}</span>}
+              <span className="badge">{t(STATUS_KEYS[cr.status])}</span>
+              {cr.resultingSpecVersion && <span className="badge">{t('changeRequests.specVersionBadge', { version: cr.resultingSpecVersion })}</span>}
             </div>
             <div className="result-body">
-              <div style={{ fontWeight: 600 }}>Grund (aus der Eskalation)</div>
+              <div style={{ fontWeight: 600 }}>{t('changeRequests.reasonHeading')}</div>
               <div style={{ whiteSpace: 'pre-wrap', marginBottom: 8 }}>{cr.reason}</div>
 
               {cr.status === 'pending' && (
                 <>
-                  <label>Vorschlag</label>
+                  <label>{t('changeRequests.proposalLabel')}</label>
                   <textarea
                     disabled={evaluating !== null}
                     value={draft.proposedChanges}
                     onChange={(e) => setDrafts((prev) => ({ ...prev, [cr.id]: { ...draft, proposedChanges: e.target.value } }))}
                     onBlur={() => saveDraft(cr.id)}
-                    placeholder="Was soll sich an der Spezifikation ändern, um diese Eskalation zu lösen?"
+                    placeholder={t('changeRequests.proposalPlaceholder')}
                     style={{ minHeight: 60 }}
                   />
-                  <label>Schweregrad</label>
+                  <label>{t('changeRequests.severityLabel')}</label>
                   <select
                     disabled={evaluating !== null}
                     value={draft.severity}
@@ -188,13 +196,13 @@ export default function ChangeRequests({ projectId, taskId, onChanged, onRequest
                   >
                     {SEVERITIES.map((s) => (
                       <option key={s} value={s}>
-                        {s}
+                        {t(SEVERITY_KEYS[s])}
                       </option>
                     ))}
                   </select>
                   <div className="row" style={{ justifyContent: 'flex-end', marginTop: 8 }}>
                     <button className="primary" disabled={evaluating !== null || selected.length === 0} onClick={() => void evaluate(cr.id)}>
-                      {evaluating === cr.id ? 'Rat bewertet…' : 'Rat fragen'}
+                      {evaluating === cr.id ? t('changeRequests.councilEvaluating') : t('changeRequests.askCouncil')}
                     </button>
                   </div>
                 </>
@@ -202,10 +210,10 @@ export default function ChangeRequests({ projectId, taskId, onChanged, onRequest
 
               {cr.councilRationale && (
                 <>
-                  <div style={{ fontWeight: 600, marginTop: 8 }}>Einschätzung des Rats</div>
+                  <div style={{ fontWeight: 600, marginTop: 8 }}>{t('changeRequests.councilAssessmentHeading')}</div>
                   {cr.councilRecommendation === 'reject' && (
                     <p className="error-text" style={{ margin: '4px 0' }}>
-                      ⚠ Der Rat empfiehlt Ablehnung - die Entscheidung liegt trotzdem bei dir.
+                      ⚠ {t('changeRequests.councilRejectWarning')}
                     </p>
                   )}
                   <div style={{ whiteSpace: 'pre-wrap' }}>{cr.councilRationale}</div>
@@ -215,10 +223,10 @@ export default function ChangeRequests({ projectId, taskId, onChanged, onRequest
               {cr.status === 'council_approved' && (
                 <div className="row" style={{ justifyContent: 'flex-end', marginTop: 8 }}>
                   <button disabled={busy === cr.id} onClick={() => void act(cr.id, () => window.api.changeRequest.reject(projectId, cr.id))}>
-                    Ablehnen
+                    {t('changeRequests.reject')}
                   </button>
                   <button className="primary" disabled={busy === cr.id} onClick={() => void act(cr.id, () => window.api.changeRequest.approve(projectId, cr.id))}>
-                    Genehmigen
+                    {t('changeRequests.approve')}
                   </button>
                 </div>
               )}
@@ -228,17 +236,17 @@ export default function ChangeRequests({ projectId, taskId, onChanged, onRequest
                   <button
                     onClick={() =>
                       onRequestSpecRevision(
-                        [cr.reason, cr.proposedChanges, cr.councilRationale ? `Council-Einschätzung: ${cr.councilRationale}` : '']
+                        [cr.reason, cr.proposedChanges, cr.councilRationale ? t('changeRequests.councilAssessmentPrefix', { rationale: cr.councilRationale }) : '']
                           .filter(Boolean)
                           .join('\n\n')
                       )
                     }
                   >
-                    Vorschlag in Spezifikation öffnen
+                    {t('changeRequests.openProposalInSpec')}
                   </button>
                   <input
                     type="number"
-                    placeholder="Neue Version-Nr."
+                    placeholder={t('changeRequests.newVersionPlaceholder')}
                     value={linkVersion[cr.id] ?? ''}
                     onChange={(e) => setLinkVersion((prev) => ({ ...prev, [cr.id]: e.target.value }))}
                     style={{ width: 140 }}
@@ -247,7 +255,7 @@ export default function ChangeRequests({ projectId, taskId, onChanged, onRequest
                     disabled={busy === cr.id || !linkVersion[cr.id]}
                     onClick={() => void act(cr.id, () => window.api.changeRequest.linkSpec(projectId, cr.id, Number(linkVersion[cr.id])))}
                   >
-                    {cr.resultingSpecVersion ? 'Spec-Verknüpfung korrigieren' : 'Mit Spec-Version verknüpfen'}
+                    {cr.resultingSpecVersion ? t('changeRequests.fixSpecLink') : t('changeRequests.linkSpecVersion')}
                   </button>
                 </div>
               )}
@@ -259,13 +267,13 @@ export default function ChangeRequests({ projectId, taskId, onChanged, onRequest
                     try { return await window.api.changeRequest.apply(projectId, cr.id) }
                     finally { setApplying(false) }
                   })}>
-                    Betroffene Tasks gezielt neu bewerten
+                    {t('changeRequests.reevaluateAffectedTasks')}
                   </button>
                 </div>
               )}
 
-              {cr.appliedAt && <p className="status-ok">✓ Angewendet – Taskgraph aktualisiert.</p>}
-              {cr.status === 'rejected' && <p className="status-neutral">Abgelehnt – Eskalation bleibt sonst ungelöst.</p>}
+              {cr.appliedAt && <p className="status-ok">✓ {t('changeRequests.applied')}</p>}
+              {cr.status === 'rejected' && <p className="status-neutral">{t('changeRequests.rejectedNote')}</p>}
             </div>
           </div>
         )

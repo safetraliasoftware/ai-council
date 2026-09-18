@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 /**
  * Shared between TaskParallel, TaskTeam and TaskCouncil - only renders once
@@ -8,6 +9,7 @@ import { useEffect, useState } from 'react'
  * checked/onChange props.
  */
 export default function CompanyTruthToggle(): React.JSX.Element | null {
+  const { t } = useTranslation()
   const [factCount, setFactCount] = useState<number | undefined>()
 
   useEffect(() => {
@@ -24,7 +26,7 @@ export default function CompanyTruthToggle(): React.JSX.Element | null {
         disabled
         style={{ width: 'auto' }}
       />
-      Company Truth verbindlich ({factCount})
+      {t('companyTruthToggle.label', { count: factCount })}
     </label>
   )
 }

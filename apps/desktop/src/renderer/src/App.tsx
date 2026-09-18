@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { SettingsState } from '../../main/ipc-types'
 import Settings from './components/Settings'
 import TaskParallel from './components/TaskParallel'
@@ -12,6 +13,7 @@ import Help from './components/Help'
 type Tab = 'parallel' | 'team' | 'council' | 'coding' | 'projectSpec' | 'settings' | 'usage' | 'help'
 
 export default function App(): React.JSX.Element {
+  const { t } = useTranslation()
   const [tab, setTab] = useState<Tab>('parallel')
   const [settings, setSettings] = useState<SettingsState | null>(null)
   const [projectSpecPrefill, setProjectSpecPrefill] = useState<ProjectSpecPrefill | null>(null)
@@ -51,33 +53,33 @@ export default function App(): React.JSX.Element {
           className={`tab ${tab === 'parallel' ? 'active' : ''}`}
           onClick={() => setTab('parallel')}
         >
-          Vergleichen
+          {t('app.tabParallel')}
         </button>
         <button className={`tab ${tab === 'team' ? 'active' : ''}`} onClick={() => setTab('team')}>
-          Team
+          {t('app.tabTeam')}
         </button>
         <button
           className={`tab ${tab === 'council' ? 'active' : ''}`}
           onClick={() => setTab('council')}
         >
-          Council
+          {t('app.tabCouncil')}
         </button>
         <button className={`tab ${tab === 'coding' ? 'active' : ''}`} onClick={() => setTab('coding')}>
-          Coding
+          {t('app.tabCoding')}
         </button>
         <button
           className={`tab ${tab === 'projectSpec' ? 'active' : ''}`}
           onClick={() => setTab('projectSpec')}
         >
-          Workflow
+          {t('app.tabWorkflow')}
         </button>
-        <button className={`tab ${tab === 'usage' ? 'active' : ''}`} onClick={() => setTab('usage')}>Verbrauch</button>
-        <button className={`tab ${tab === 'help' ? 'active' : ''}`} onClick={() => setTab('help')}>Hilfe</button>
+        <button className={`tab ${tab === 'usage' ? 'active' : ''}`} onClick={() => setTab('usage')}>{t('app.tabUsage')}</button>
+        <button className={`tab ${tab === 'help' ? 'active' : ''}`} onClick={() => setTab('help')}>{t('app.tabHelp')}</button>
         <button
           className={`tab ${tab === 'settings' ? 'active' : ''}`}
           onClick={() => setTab('settings')}
         >
-          Einstellungen {anyKeyMissing ? '⚠️' : ''}
+          {t('app.tabSettings')} {anyKeyMissing ? '⚠️' : ''}
         </button>
       </div>
       <div className="content">

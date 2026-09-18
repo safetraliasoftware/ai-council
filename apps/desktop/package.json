@@ -1,6 +1,6 @@
 {
   "name": "@ai-council/desktop",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Desktop-App zum gemeinsamen Beauftragen von Claude, Gemini und ChatGPT",
   "main": "./out/main/index.js",
   "author": "Andre",
@@ -22,8 +22,11 @@
     "@ai-council/shared": "*",
     "@ai-council/task-graph": "*",
     "better-sqlite3": "^13.0.3",
+    "electron-updater": "^6.8.9",
+    "i18next": "^26.4.2",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "react-i18next": "^17.0.14"
   },
   "devDependencies": {
     "@electron-toolkit/utils": "^4.0.0",

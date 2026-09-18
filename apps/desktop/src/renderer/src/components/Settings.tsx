@@ -1,11 +1,19 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { ProviderId } from '@ai-council/shared'
 import { PROVIDER_LABELS } from '@ai-council/shared'
 import type { CodingExecutorId, ParticipantBackendChoice, SettingsState } from '../../../main/ipc-types'
+import type { UiLanguage } from '../../../main/language-config'
 import type { ExecutorAvailability } from '@ai-council/coding'
 import CompanyTruth from './CompanyTruth'
 
 const PROVIDERS: ProviderId[] = ['anthropic', 'openai', 'gemini']
+const LANGUAGES: { id: UiLanguage; label: string }[] = [
+  { id: 'de', label: 'Deutsch' },
+  { id: 'en', label: 'English' },
+  { id: 'fr', label: 'Français' },
+  { id: 'es', label: 'Español' }
+]
 
 export const LOCAL_AGENT_LABEL: Record<ProviderId, string> = {
   anthropic: 'Claude Code',
@@ -34,6 +42,7 @@ export default function Settings({
   settings: SettingsState
   onChange: () => Promise<void>
 }): React.JSX.Element {
+  const { t, i18n } = useTranslation()
   const [keyDrafts, setKeyDrafts] = useState<Record<ProviderId, string>>({
     anthropic: '',
     openai: '',
@@ -48,6 +57,7 @@ export default function Settings({
   const [workspaceDraft, setWorkspaceDraft] = useState('')
   const [workspaceBusy, setWorkspaceBusy] = useState(false)
   const [workspaceError, setWorkspaceError] = useState('')
+  const [language, setLanguage] = useState<UiLanguage>('de')
 
   useEffect(() => {
     window.api.coding.detectAll().then(setDetectAll)
@@ -56,6 +66,7 @@ export default function Settings({
       setWorkspaceRoot(root)
       setWorkspaceDraft(root ?? '')
     })
+    window.api.settings.getLanguage().then(setLanguage)
   }, [])
 
   const pickWorkspaceDirectory = async (): Promise<void> => {
@@ -69,7 +80,7 @@ export default function Settings({
     const result = await window.api.settings.setWorkspaceRoot(workspaceDraft)
     setWorkspaceBusy(false)
     if (!result.ok) {
-      setWorkspaceError(result.error ?? 'Unbekannter Fehler.')
+      setWorkspaceError(result.error ?? t('settings.unknownError'))
       return
     }
     setWorkspaceRoot(workspaceDraft)
@@ -110,12 +121,16 @@ export default function Settings({
     setTestStatus((s) => ({ ...s, [provider]: { ...result, testing: false } }))
   }
 
+  const changeLanguage = async (next: UiLanguage): Promise<void> => {
+    setLanguage(next)
+    await i18n.changeLanguage(next)
+    await window.api.settings.setLanguage(next)
+  }
+
   return (
     <div className="panel" style={{ maxWidth: 800 }}>
       <p style={{ color: 'var(--text-muted)', marginTop: 0 }}>
-        API-Keys werden ausschließlich verschlüsselt lokal auf diesem Rechner gespeichert (im
-        Electron-Hauptprozess, via safeStorage) und verlassen diesen Prozess nie – auch nicht in
-        Richtung dieser Oberfläche.
+        {t('settings.apiKeyDisclaimer')}
       </p>
       {PROVIDERS.map((provider) => {
         const cfg = settings[provider]
@@ -129,16 +144,16 @@ export default function Settings({
             <div className="field" style={{ margin: 0 }}>
               {cfg.hasKey ? (
                 <div className="row">
-                  <span className="status-ok">Key gespeichert ✓</span>
+                  <span className="status-ok">{t('settings.keySaved')}</span>
                   <button className="link" onClick={() => clearKey(provider)}>
-                    entfernen
+                    {t('settings.remove')}
                   </button>
                   <button className="link" onClick={() => test(provider)}>
-                    testen
+                    {t('settings.test')}
                   </button>
-                  {status?.testing && <span className="status-neutral">prüfe…</span>}
+                  {status?.testing && <span className="status-neutral">{t('settings.testing')}</span>}
                   {status && !status.testing && status.ok && (
-                    <span className="status-ok">funktioniert ✓</span>
+                    <span className="status-ok">{t('settings.works')}</span>
                   )}
                   {status && !status.testing && !status.ok && (
                     <span className="status-bad">{status.error}</span>
@@ -148,14 +163,14 @@ export default function Settings({
                 <div className="row">
                   <input
                     type="password"
-                    placeholder="API-Key einfügen"
+                    placeholder={t('settings.apiKeyPlaceholder')}
                     value={keyDrafts[provider]}
                     onChange={(e) =>
                       setKeyDrafts((d) => ({ ...d, [provider]: e.target.value }))
                     }
                   />
                   <button className="secondary" onClick={() => saveKey(provider)}>
-                    Speichern
+                    {t('settings.save')}
                   </button>
                 </div>
               )}
@@ -165,7 +180,7 @@ export default function Settings({
                 type="text"
                 value={cfg.model}
                 onChange={(e) => changeModel(provider, e.target.value)}
-                title="Modell-ID (bei Fehlern anpassen)"
+                title={t('settings.modelIdTitle')}
               />
             </div>
             <div className="field" style={{ margin: 0 }}>
@@ -173,9 +188,9 @@ export default function Settings({
                 value={cfg.backend}
                 onChange={(e) => changeBackend(provider, e.target.value as ParticipantBackendChoice)}
               >
-                <option value="api">API</option>
-                <option value="local">{LOCAL_AGENT_LABEL[provider]} (lokal)</option>
-                <option value="auto">Automatisch</option>
+                <option value="api">{t('settings.backendApi')}</option>
+                <option value="local">{t('settings.backendLocal', { agent: LOCAL_AGENT_LABEL[provider] })}</option>
+                <option value="auto">{t('settings.backendAuto')}</option>
               </select>
               {cfg.backend !== 'api' &&
                 (() => {
@@ -183,7 +198,7 @@ export default function Settings({
                   if (!status) return null
                   return (
                     <div className={status.installed ? 'status-ok' : 'status-bad'} style={{ fontSize: 12 }}>
-                      {status.installed ? `verfügbar (Auth: ${status.authStatus})` : 'nicht installiert'}
+                      {status.installed ? t('settings.availableAuth', { status: status.authStatus }) : t('settings.notInstalled')}
                     </div>
                   )
                 })()}
@@ -199,15 +214,13 @@ export default function Settings({
             onChange={(e) => toggleAllowFallback(e.target.checked)}
             style={{ width: 'auto' }}
           />
-          Bei "Automatisch": falls kein lokaler Agent verfügbar ist, auf die kostenpflichtige API ausweichen
+          {t('settings.allowFallback')}
         </label>
       </div>
 
-      <h3 style={{ marginTop: 32 }}>Lokale KI-Agenten einrichten</h3>
+      <h3 style={{ marginTop: 32 }}>{t('settings.localAgentsHeading')}</h3>
       <p style={{ color: 'var(--text-muted)' }}>
-        Installation und Anmeldung laufen außerhalb dieser App über die offizielle Anleitung des jeweiligen
-        Anbieters – der erkannte Status hier aktualisiert sich automatisch, sobald die CLI verfügbar und
-        angemeldet ist.
+        {t('settings.localAgentsIntro')}
       </p>
       {PROVIDERS.map((provider) => {
         const info = LOCAL_AGENT_DOCS[provider]
@@ -219,40 +232,45 @@ export default function Settings({
               {LOCAL_AGENT_LABEL[provider]} <span className="status-neutral">({info.binary})</span>
             </div>
             <a href={info.docsUrl} target="_blank" rel="noreferrer">
-              Offizielle Anleitung
+              {t('settings.officialGuide')}
             </a>
             <span className={status?.installed ? 'status-ok' : 'status-bad'}>
-              {status ? (status.installed ? `installiert (Auth: ${status.authStatus})` : 'nicht gefunden') : 'prüfe…'}
+              {status ? (status.installed ? t('settings.installedAuth', { status: status.authStatus }) : t('settings.notFound')) : t('settings.checking')}
             </span>
           </div>
         )
       })}
 
-      <h3 style={{ marginTop: 32 }}>Werkstatt-Ordner</h3>
+      <h3 style={{ marginTop: 32 }}>{t('settings.workspaceHeading')}</h3>
       <p style={{ color: 'var(--text-muted)' }}>
-        Ein gemeinsamer Ordner für neue Projekte. Wird hier einmalig als Git-Repository eingerichtet; jedes
-        neue Projekt legt sich danach als eigener Unterordner darin an, ohne dass "innerhalb eines anderen
-        Git-Projekts" abgelehnt zu werden. Bereits bestehende, eigene Git-Projekte anderswo bleiben davon
-        unberührt.
+        {t('settings.workspaceIntro')}
       </p>
-      {workspaceRoot && <p className="status-ok">Aktuell eingerichtet: {workspaceRoot}</p>}
+      {workspaceRoot && <p className="status-ok">{t('settings.workspaceCurrentlySetup', { path: workspaceRoot })}</p>}
       <div className="row">
         <input
           type="text"
           value={workspaceDraft}
           onChange={(e) => setWorkspaceDraft(e.target.value)}
-          placeholder="C:\Users\...\Projekte"
+          placeholder={t('settings.workspacePlaceholder')}
         />
         <button className="secondary" onClick={pickWorkspaceDirectory}>
-          Durchsuchen…
+          {t('settings.browse')}
         </button>
         <button className="primary" disabled={workspaceBusy || !workspaceDraft.trim()} onClick={saveWorkspaceRoot}>
-          {workspaceBusy ? 'Richte ein…' : workspaceRoot ? 'Aktualisieren' : 'Einrichten'}
+          {workspaceBusy ? t('settings.settingUp') : workspaceRoot ? t('settings.update') : t('settings.setup')}
         </button>
       </div>
       {workspaceError && <p className="error-text">{workspaceError}</p>}
 
-      <h3 style={{ marginTop: 32 }}>Company Truth</h3>
+      <h3 style={{ marginTop: 32 }}>{t('settings.languageHeading')}</h3>
+      <p style={{ color: 'var(--text-muted)' }}>{t('settings.languageIntro')}</p>
+      <select value={language} onChange={(e) => changeLanguage(e.target.value as UiLanguage)}>
+        {LANGUAGES.map((l) => (
+          <option key={l.id} value={l.id}>{l.label}</option>
+        ))}
+      </select>
+
+      <h3 style={{ marginTop: 32 }}>{t('settings.companyTruthHeading')}</h3>
       <CompanyTruth />
     </div>
   )

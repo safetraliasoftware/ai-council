@@ -11,6 +11,7 @@ import { ElectronSecretStore } from './secret-store'
 import { ModelConfig } from './model-config'
 import { BackendConfig } from './backend-config'
 import { WorkspaceConfig } from './workspace-config'
+import { LanguageConfig, type UiLanguage } from './language-config'
 import { createParticipantFactory } from './participant-factory'
 import { withAttachments } from './attachments'
 import { listCompanyFacts } from './company-truth-store'
@@ -44,7 +45,8 @@ export function registerIpcHandlers(
   modelConfig: ModelConfig,
   executors: Record<CodingExecutorId, CodingExecutor>,
   backendConfig: BackendConfig,
-  workspaceConfig: WorkspaceConfig
+  workspaceConfig: WorkspaceConfig,
+  languageConfig: LanguageConfig
 ): void {
   const activeRuns = new Map<string, AbortController>()
   const buildParticipant = createParticipantFactory(secretStore, modelConfig, executors, backendConfig)
@@ -107,6 +109,12 @@ export function registerIpcHandlers(
 
   ipcMain.handle('settings:setAllowPaidApiFallback', (_e, value: boolean) => {
     backendConfig.setAllowPaidApiFallback(value)
+  })
+
+  ipcMain.handle('settings:getLanguage', () => languageConfig.getLanguage())
+
+  ipcMain.handle('settings:setLanguage', (_e, language: UiLanguage) => {
+    languageConfig.setLanguage(language)
   })
 
   ipcMain.handle('settings:getWorkspaceRoot', () => workspaceConfig.getWorkspaceRoot())

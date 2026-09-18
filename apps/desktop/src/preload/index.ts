@@ -1,4 +1,5 @@
 import type { UsageRecord } from '../main/usage-store'
+import type { UiLanguage } from '../main/language-config'
 import { contextBridge, ipcRenderer } from 'electron'
 import type { TaskBudget } from '@ai-council/project-domain'
 import type { ProviderId } from '@ai-council/shared'
@@ -47,6 +48,10 @@ import type { ExecutorAvailability } from '@ai-council/coding'
 
 const api = {
   usage: { list: (projectId?: string): Promise<UsageRecord[]> => ipcRenderer.invoke('usage:list', projectId) },
+  updates: {
+    check: (): Promise<void> => ipcRenderer.invoke('updates:check'),
+    getVersion: (): Promise<string> => ipcRenderer.invoke('updates:getVersion')
+  },
   settings: {
     get: (): Promise<SettingsState> => ipcRenderer.invoke('settings:get'),
     setKey: (provider: ProviderId, apiKey: string): Promise<SettingsState> =>
@@ -64,7 +69,9 @@ const api = {
       ipcRenderer.invoke('settings:testKey', provider),
     getWorkspaceRoot: (): Promise<string | undefined> => ipcRenderer.invoke('settings:getWorkspaceRoot'),
     setWorkspaceRoot: (path: string): Promise<WorktreeActionResult> =>
-      ipcRenderer.invoke('settings:setWorkspaceRoot', path)
+      ipcRenderer.invoke('settings:setWorkspaceRoot', path),
+    getLanguage: (): Promise<UiLanguage> => ipcRenderer.invoke('settings:getLanguage'),
+    setLanguage: (language: UiLanguage): Promise<void> => ipcRenderer.invoke('settings:setLanguage', language)
   },
   task: {
     runParallel: (req: ParallelRunRequestDto): Promise<{ runId: string; error?: string }> =>

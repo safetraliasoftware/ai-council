@@ -1,20 +1,25 @@
+import { useTranslation } from 'react-i18next'
 import type { CouncilCallUsage } from '@ai-council/council-core'
 import { PROVIDER_LABELS } from '@ai-council/shared'
 
-const STAGES: Record<string, string> = { independent: 'Entwurf', critique: 'Kritik', revision: 'Überarbeitung', synthesis: 'Synthese' }
+const STAGE_KEYS: Record<string, string> = {
+  independent: 'councilUsage.stageDraft', critique: 'councilUsage.stageCritique',
+  revision: 'councilUsage.stageRevision', synthesis: 'councilUsage.stageSynthesis'
+}
 
 export default function CouncilUsage({ calls }: { calls: CouncilCallUsage[] }): React.JSX.Element | null {
+  const { t } = useTranslation()
   if (!calls.length) return null
   return <details className="panel">
-    <summary>Verbrauch: {calls.length} Teilnehmeraufrufe</summary>
-    <p>Ein Teilnehmeraufruf kann mehrere interne Modellaufrufe enthalten. Angezeigt werden nur gemeldete Tokenwerte und Kosten; daraus lässt sich kein verbleibendes Abo-Kontingent ableiten.</p>
-    <table style={{ width: '100%', textAlign: 'left', borderSpacing: '12px 8px' }}><thead><tr><th>Phase</th><th>Anbieter</th><th>Status</th><th>Eingabe / Ausgabe (Tokens)</th><th>Gemeldete Kosten</th></tr></thead>
+    <summary>{t('councilUsage.summary', { count: calls.length })}</summary>
+    <p>{t('councilUsage.intro')}</p>
+    <table style={{ width: '100%', textAlign: 'left', borderSpacing: '12px 8px' }}><thead><tr><th>{t('councilUsage.colPhase')}</th><th>{t('councilUsage.colProvider')}</th><th>{t('councilUsage.colStatus')}</th><th>{t('councilUsage.colInputOutput')}</th><th>{t('councilUsage.colCosts')}</th></tr></thead>
       <tbody>{calls.map((call, i) => <tr key={i}>
-        <td>{call.stage ? STAGES[call.stage] : call.stepIndex !== undefined ? `Schritt ${call.stepIndex + 1}` : 'Vergleich'}</td>
-        <td>{PROVIDER_LABELS[call.providerId]} ({call.backend === 'api' ? 'API' : 'Lokal'})</td>
-        <td>{call.outcome === 'completed' ? 'Fertig' : call.outcome === 'cancelled' ? 'Abgebrochen' : 'Fehler'}</td>
-        <td>{call.inputTokens ?? 'Nicht gemeldet'} / {call.outputTokens ?? 'Nicht gemeldet'}</td>
-        <td>{call.costUsd === undefined ? 'Nicht gemeldet' : `$${call.costUsd.toFixed(4)}`}</td>
+        <td>{call.stage ? t(STAGE_KEYS[call.stage]) : call.stepIndex !== undefined ? t('councilUsage.stepLabel', { step: call.stepIndex + 1 }) : t('councilUsage.compareLabel')}</td>
+        <td>{PROVIDER_LABELS[call.providerId]} ({call.backend === 'api' ? t('councilUsage.backendApi') : t('councilUsage.backendLocal')})</td>
+        <td>{call.outcome === 'completed' ? t('councilUsage.outcomeCompleted') : call.outcome === 'cancelled' ? t('councilUsage.outcomeCancelled') : t('councilUsage.outcomeError')}</td>
+        <td>{call.inputTokens ?? t('councilUsage.notReported')} / {call.outputTokens ?? t('councilUsage.notReported')}</td>
+        <td>{call.costUsd === undefined ? t('councilUsage.notReported') : `$${call.costUsd.toFixed(4)}`}</td>
       </tr>)}</tbody>
     </table>
   </details>

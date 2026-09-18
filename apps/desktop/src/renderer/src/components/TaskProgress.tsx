@@ -1,13 +1,18 @@
+import { useTranslation } from 'react-i18next'
 import type { TaskAttempt, TaskBudget, TaskFailureKind } from '@ai-council/project-domain'
 
-const FAILURES: Record<TaskFailureKind, string> = {
-  authentication: 'Anmeldung beim Anbieter erforderlich', quota: 'Nutzungslimit erreicht – später oder mit anderem Agenten fortsetzen',
-  process: 'Agent technisch unterbrochen', budget: 'Taskbudget ausgeschöpft', cancelled: 'Von dir angehalten',
-  implementation: 'Fachliche Korrektur erforderlich', policy: 'Unerlaubte Änderung erkannt', storage: 'Speicherfehler'
+const FAILURE_KEYS: Record<TaskFailureKind, string> = {
+  authentication: 'taskProgress.failureAuthentication', quota: 'taskProgress.failureQuota',
+  process: 'taskProgress.failureProcess', budget: 'taskProgress.failureBudget', cancelled: 'taskProgress.failureCancelled',
+  implementation: 'taskProgress.failureImplementation', policy: 'taskProgress.failurePolicy', storage: 'taskProgress.failureStorage'
 }
-const STAGES: Record<string, string> = { implement: 'Implementierung', fix: 'Korrektur', finalReview: 'Unabhängige Prüfung', checks: 'Build und Tests', ready: 'Bereit zur Integration' }
+const STAGE_KEYS: Record<string, string> = {
+  implement: 'taskProgress.stageImplement', fix: 'taskProgress.stageFix', finalReview: 'taskProgress.stageFinalReview',
+  checks: 'taskProgress.stageChecks', ready: 'taskProgress.stageReady'
+}
 
 export default function TaskProgress({ attempts, budget }: { attempts: TaskAttempt[]; budget: TaskBudget }): React.JSX.Element {
+  const { t } = useTranslation()
   const latest = attempts.at(-1)
   const calls = attempts.flatMap(a => a.runtime?.calls ?? [])
   const activeMs = attempts.reduce((n, a) => n + (a.runtime?.activeMs ?? 0), 0)
@@ -15,24 +20,29 @@ export default function TaskProgress({ attempts, budget }: { attempts: TaskAttem
   const openFindings = latest?.reviews.flatMap(r => r.findings) ?? []
   const suggestions = latest?.reviews.flatMap(r => r.suggestions ?? []) ?? []
   const providers = [...new Set(calls.map(call => call.executorId))]
+  const stageOrFailureLabel = latest?.runtime?.failureKind ? t(FAILURE_KEYS[latest.runtime.failureKind])
+    : STAGE_KEYS[latest?.runtime?.stage ?? ''] ? t(STAGE_KEYS[latest?.runtime?.stage ?? '']) : t('taskProgress.noMeasurements')
   return <div className="status-neutral">
-    <p>{latest?.runtime?.failureKind ? FAILURES[latest.runtime.failureKind] : STAGES[latest?.runtime?.stage ?? ''] ?? 'Noch keine Messwerte'}
-      {openFindings.length > 0 ? ` · ${openFindings.length} offene Review-Befunde` : ''}</p>
-    <p>{calls.length}/{budget.maxCalls} Agentenaufrufe · {(activeMs / 60_000).toFixed(1)}/{budget.maxActiveMs / 60_000} aktive Minuten · {corrections}/{budget.maxCorrections} Korrekturen</p>
-    {latest?.status === 'paused' && <p>Arbeitsstand erhalten. Ursache beheben und fortsetzen; das startet keine neue Implementierung von vorn.</p>}
-    {suggestions.length > 0 && <details><summary>Optionale Hinweise – blockieren nicht</summary><ul>{suggestions.map((s, i) => <li key={i}>{s.message}</li>)}</ul></details>}
-    <details><summary>Verbrauch und Laufzeiten</summary>
-      <p>Messwerte ab dieser Programmversion. Aktive Zeit umfasst Agenten und Prüfungen, ohne Wartezeit auf deine Freigaben. Token- und Kostenangaben erscheinen nur, wenn der Agent sie meldet.</p>
-      <table><thead><tr><th>Agent</th><th>Aufrufe / Fehler</th><th>Laufzeit</th><th>Eingabe / Ausgabe (Zeichen)</th><th>Gemeldete Tokens</th><th>Gemeldete Kosten</th></tr></thead>
+    <p>{stageOrFailureLabel}
+      {openFindings.length > 0 ? t('taskProgress.openFindingsSuffix', { count: openFindings.length }) : ''}</p>
+    <p>{t('taskProgress.statsLine', {
+      calls: calls.length, maxCalls: budget.maxCalls, minutes: (activeMs / 60_000).toFixed(1),
+      maxMinutes: budget.maxActiveMs / 60_000, corrections, maxCorrections: budget.maxCorrections
+    })}</p>
+    {latest?.status === 'paused' && <p>{t('taskProgress.pausedHint')}</p>}
+    {suggestions.length > 0 && <details><summary>{t('taskProgress.optionalHints')}</summary><ul>{suggestions.map((s, i) => <li key={i}>{s.message}</li>)}</ul></details>}
+    <details><summary>{t('taskProgress.usageHeading')}</summary>
+      <p>{t('taskProgress.usageIntro')}</p>
+      <table><thead><tr><th>{t('taskProgress.colAgent')}</th><th>{t('taskProgress.colCallsErrors')}</th><th>{t('taskProgress.colRuntime')}</th><th>{t('taskProgress.colInputOutput')}</th><th>{t('taskProgress.colTokens')}</th><th>{t('taskProgress.colCosts')}</th></tr></thead>
         <tbody>{providers.map(provider => {
           const own = calls.filter(c => c.executorId === provider)
           const tokens = own.filter(c => c.inputTokens !== undefined || c.outputTokens !== undefined)
           const costs = own.filter(c => c.costUsd !== undefined)
           return <tr key={provider}><td>{provider}</td><td>{own.length} / {own.filter(c => c.outcome === 'failed').length}</td>
-            <td>{(own.reduce((n, c) => n + ((c.finishedAt ?? Date.now()) - c.startedAt), 0) / 60_000).toFixed(1)} min</td>
+            <td>{t('taskProgress.minutesValue', { minutes: (own.reduce((n, c) => n + ((c.finishedAt ?? Date.now()) - c.startedAt), 0) / 60_000).toFixed(1) })}</td>
             <td>{own.reduce((n, c) => n + c.inputChars, 0)} / {own.reduce((n, c) => n + c.outputChars, 0)}</td>
-            <td>{tokens.length ? `${tokens.reduce((n, c) => n + (c.inputTokens ?? 0) + (c.outputTokens ?? 0), 0)} (${tokens.length}/${own.length} Aufrufe)` : 'Nicht gemeldet'}</td>
-            <td>{costs.length ? `$${costs.reduce((n, c) => n + c.costUsd!, 0).toFixed(4)} (${costs.length}/${own.length} Aufrufe)` : 'Nicht gemeldet'}</td></tr>
+            <td>{tokens.length ? t('taskProgress.tokensSummary', { total: tokens.reduce((n, c) => n + (c.inputTokens ?? 0) + (c.outputTokens ?? 0), 0), count: tokens.length, calls: own.length }) : t('taskProgress.notReported')}</td>
+            <td>{costs.length ? t('taskProgress.costsSummary', { amount: costs.reduce((n, c) => n + c.costUsd!, 0).toFixed(4), count: costs.length, calls: own.length }) : t('taskProgress.notReported')}</td></tr>
         })}</tbody></table>
     </details>
   </div>

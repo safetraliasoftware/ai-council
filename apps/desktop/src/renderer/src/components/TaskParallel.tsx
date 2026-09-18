@@ -1,6 +1,7 @@
 import CouncilUsage from './CouncilUsage'
 import type { CouncilCallUsage } from '@ai-council/council-core'
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { ProviderId } from '@ai-council/shared'
 import { PROVIDER_LABELS } from '@ai-council/shared'
 import type { CouncilRunEvent } from '@ai-council/council-core'
@@ -25,6 +26,7 @@ const EMPTY_RESULTS: Record<ProviderId, ResultState> = {
 }
 
 export default function TaskParallel({ settings }: { settings: SettingsState }): React.JSX.Element {
+  const { t } = useTranslation()
   const [prompt, setPrompt] = useState('')
   const [attachments, setAttachments] = useState<AttachedArtifact[]>([])
   const [selected, setSelected] = useState<ProviderId[]>(ALL_PROVIDERS)
@@ -86,7 +88,7 @@ export default function TaskParallel({ settings }: { settings: SettingsState }):
     })
     if (!runId) {
       setRunning(false)
-      setStartError(error ?? 'Lauf konnte nicht gestartet werden.')
+      setStartError(error ?? t('taskParallel.startFailed'))
       return
     }
     currentRunId.current = runId
@@ -102,11 +104,11 @@ export default function TaskParallel({ settings }: { settings: SettingsState }):
       <CouncilUsage calls={usage} />
       <div className="panel">
         <div className="field">
-          <label>Aufgabe</label>
+          <label>{t('taskParallel.taskLabel')}</label>
           <textarea
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
-            placeholder="z.B. Entwirf drei Social-Media-Post-Ideen für den Launch von Plaza OS."
+            placeholder={t('taskParallel.taskPlaceholder')}
           />
         </div>
         <div className="field">
@@ -130,11 +132,11 @@ export default function TaskParallel({ settings }: { settings: SettingsState }):
           <div className="row">
             {running && (
               <button className="secondary" onClick={cancel}>
-                Abbrechen
+                {t('taskParallel.cancel')}
               </button>
             )}
             <button className="primary" onClick={run} disabled={running || !prompt.trim()}>
-              {running ? 'Läuft…' : 'An alle senden'}
+              {running ? t('taskParallel.running') : t('taskParallel.sendToAll')}
             </button>
           </div>
         </div>
@@ -153,10 +155,10 @@ export default function TaskParallel({ settings }: { settings: SettingsState }):
               <div className="result-header">
                 <span className={`provider-dot dot-${p}`} />
                 {PROVIDER_LABELS[p]}
-                {!r.done && <span className="status-neutral">läuft…</span>}
+                {!r.done && <span className="status-neutral">{t('taskParallel.runningShort')}</span>}
                 {r.outputTokens !== undefined && (
                   <span className="status-neutral" style={{ marginLeft: 'auto' }}>
-                    {r.outputTokens} Tokens
+                    {t('taskParallel.tokensSuffix', { count: r.outputTokens })}
                   </span>
                 )}
               </div>
@@ -165,7 +167,7 @@ export default function TaskParallel({ settings }: { settings: SettingsState }):
                 {r.error ? (
                   <span className="error-text">{r.error}</span>
                 ) : (
-                  r.text || <span className="status-neutral">Warte auf Ergebnis…</span>
+                  r.text || <span className="status-neutral">{t('taskParallel.waitingForResult')}</span>
                 )}
               </div>
             </div>

@@ -17,6 +17,7 @@ import { ElectronSecretStore } from './secret-store'
 import { ModelConfig } from './model-config'
 import { BackendConfig } from './backend-config'
 import { WorkspaceConfig } from './workspace-config'
+import { LanguageConfig } from './language-config'
 import type { CodingExecutorId } from './ipc-types'
 import { runCouncil } from '@ai-council/council-core'
 import { createParticipantFactory } from './participant-factory'
@@ -25,6 +26,8 @@ import { listCompanyFacts } from './company-truth-store'
 import { recordCouncilUsage } from './usage-store'
 import { installShutdown } from './shutdown'
 import { registerUsageIpc } from './usage-ipc'
+import { checkForUpdates } from './auto-updater'
+import { registerUpdatesIpc } from './updates-ipc'
 
 let mainWindow: BrowserWindow | null = null
 const ownsInstance = app.requestSingleInstanceLock()
@@ -86,6 +89,7 @@ app.whenReady().then(() => {
   const modelConfig = ModelConfig.loadFromDisk(configPath)
   const backendConfig = BackendConfig.loadFromDisk(configPath)
   const workspaceConfig = WorkspaceConfig.loadFromDisk(configPath)
+  const languageConfig = LanguageConfig.loadFromDisk(configPath)
 
   // Constructed once, shared by the Coding-tab IPC surface and by the
   // CouncilParticipant factory below - both use the very same instances,
@@ -97,7 +101,7 @@ app.whenReady().then(() => {
     'google-antigravity-cli': new GoogleAntigravityCliExecutor()
   }
 
-  registerIpcHandlers(() => mainWindow, secretStore, modelConfig, executors, backendConfig, workspaceConfig)
+  registerIpcHandlers(() => mainWindow, secretStore, modelConfig, executors, backendConfig, workspaceConfig, languageConfig)
   registerCodingIpcHandlers(() => mainWindow, executors)
   registerProjectsIpcHandlers()
   registerArtifactsIpcHandlers(() => mainWindow)
@@ -118,8 +122,10 @@ app.whenReady().then(() => {
   })
   registerChangeRequestIpcHandlers(() => mainWindow, secretStore, modelConfig, executors, backendConfig, engine)
   registerUsageIpc()
+  registerUpdatesIpc()
   createWindow()
   installShutdown(() => mainWindow, engine)
+  setTimeout(checkForUpdates, 5000)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

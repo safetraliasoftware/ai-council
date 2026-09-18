@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { PermissionTier } from '@ai-council/coding'
 import type { ProjectProfile } from '../../main/ipc-types'
 
@@ -21,6 +22,7 @@ export default function ProjectPicker({
   currentPermissionTier,
   onApply
 }: ProjectPickerProps): React.JSX.Element {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [projects, setProjects] = useState<ProjectProfile[]>([])
   const [loading, setLoading] = useState(false)
@@ -72,14 +74,14 @@ export default function ProjectPicker({
   return (
     <div>
       <button className="secondary" onClick={toggle}>
-        {open ? 'Projekte schließen' : 'Projekte'}
+        {open ? t('projectPicker.closeProjects') : t('projectPicker.openProjects')}
       </button>
 
       {open && (
         <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
-          {loading && <span className="status-neutral">Lädt…</span>}
+          {loading && <span className="status-neutral">{t('projectPicker.loading')}</span>}
           {!loading && projects.length === 0 && (
-            <span className="status-neutral">Noch keine gespeicherten Projekte.</span>
+            <span className="status-neutral">{t('projectPicker.noProjects')}</span>
           )}
           {!loading &&
             projects.map((project) => (
@@ -95,7 +97,7 @@ export default function ProjectPicker({
                   {project.workingDirectory}
                 </span>
                 <button className="secondary" onClick={() => remove(project.id)}>
-                  Löschen
+                  {t('projectPicker.delete')}
                 </button>
               </div>
             ))}
@@ -105,14 +107,14 @@ export default function ProjectPicker({
               type="text"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              placeholder="Name für aktuelles Arbeitsverzeichnis"
+              placeholder={t('projectPicker.namePlaceholder')}
             />
             <button
               className="secondary"
               onClick={saveCurrent}
               disabled={saving || !newName.trim() || !currentWorkingDirectory.trim()}
             >
-              {saving ? 'Wird eingerichtet…' : 'Als Projekt speichern'}
+              {saving ? t('projectPicker.settingUp') : t('projectPicker.saveAsProject')}
             </button>
           </div>
           {error && <p className="error-text">{error}</p>}

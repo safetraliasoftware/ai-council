@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import type { PermissionTier } from '@ai-council/coding'
 import type { CodingDetectResult, CodingExecutorId, HistoryListEntry } from '../../../main/ipc-types'
 import { CODING_EXECUTOR_LABELS, PERMISSION_TIER_LABELS } from '../../../main/ipc-types'
@@ -26,7 +28,7 @@ interface PlanItem {
  * once. Returns [] when fewer than two numbered items are found, so the
  * caller can fall back to handing off the whole answer unchanged.
  */
-function parsePlanItems(text: string): PlanItem[] {
+function parsePlanItems(text: string, t: TFunction): PlanItem[] {
   const matches = [...text.matchAll(/^\d+\.\s+/gm)]
   if (matches.length < 2) return []
 
@@ -36,12 +38,13 @@ function parsePlanItems(text: string): PlanItem[] {
     const end = i + 1 < matches.length ? matches[i + 1].index! : text.length
     const body = text.slice(start, end).trim()
     const firstLine = body.split('\n')[0].replace(/^\d+\.\s+/, '').replace(/\*\*/g, '').trim()
-    items.push({ title: firstLine || `Punkt ${i + 1}`, body })
+    items.push({ title: firstLine || t('taskCoding.fallbackPointTitle', { n: i + 1 }), body })
   }
   return items
 }
 
 export default function TaskCoding({ onHandoffToWorkflow }: TaskCodingProps): React.JSX.Element {
+  const { t } = useTranslation()
   const [executorId, setExecutorId] = useState<CodingExecutorId>('claude-code-cli')
   const [workingDirectory, setWorkingDirectory] = useState('')
   const [permissionTier, setPermissionTier] = useState<PermissionTier>('read-only')
@@ -131,7 +134,7 @@ export default function TaskCoding({ onHandoffToWorkflow }: TaskCodingProps): Re
         workingDirectory,
         permissionTier
       })
-      if (!taskId) throw new Error(error ?? 'Aufgabe konnte nicht gestartet werden.')
+      if (!taskId) throw new Error(error ?? t('taskCoding.startTaskFailed'))
       currentTaskId.current = taskId
     } catch (err) {
       // Without this, any rejection here left "Läuft…" stuck forever with
@@ -145,7 +148,7 @@ export default function TaskCoding({ onHandoffToWorkflow }: TaskCodingProps): Re
     if (!followUp.trim() || !sessionId) return
     setRunning(true)
     setStartError('')
-    logsRef.current = [...logsRef.current, { kind: 'status', message: `Du: ${followUp}`, count: 1 }]
+    logsRef.current = [...logsRef.current, { kind: 'status', message: t('taskCoding.youPrefix', { text: followUp }), count: 1 }]
     setLogs(logsRef.current)
     try {
       const { taskId, error } = await window.api.coding.resumeSession({
@@ -155,7 +158,7 @@ export default function TaskCoding({ onHandoffToWorkflow }: TaskCodingProps): Re
         permissionTier,
         sessionId
       })
-      if (!taskId) throw new Error(error ?? 'Nachfrage konnte nicht gesendet werden.')
+      if (!taskId) throw new Error(error ?? t('taskCoding.followUpFailed'))
       currentTaskId.current = taskId
       setFollowUp('')
     } catch (err) {
@@ -172,7 +175,7 @@ export default function TaskCoding({ onHandoffToWorkflow }: TaskCodingProps): Re
   const handoff = (): void => {
     const lastText = [...logs].reverse().find((e): e is Extract<LogEntry, { kind: 'text' }> => e.kind === 'text')
     if (!lastText || !workingDirectory.trim()) return
-    const items = parsePlanItems(lastText.text)
+    const items = parsePlanItems(lastText.text, t)
     if (items.length >= 2) {
       setPlanPicker(items)
       return
@@ -228,20 +231,18 @@ export default function TaskCoding({ onHandoffToWorkflow }: TaskCodingProps): Re
       <div className="panel">
         <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <p style={{ color: 'var(--text-muted)', marginTop: 0 }}>
-            Führt die echte, lokal installierte CLI aus (Claude Code, OpenAI Codex oder Gemini/Antigravity)
-            und nutzt dabei deine eigene Anmeldung/Abo dieses Tools – kein separater API-Key, keine
-            zusätzliche Abrechnung über den Council.
+            {t('taskCoding.description')}
           </p>
           <button className="secondary" onClick={toggleHistory}>
-            {historyOpen ? 'Verlauf schließen' : 'Verlauf'}
+            {historyOpen ? t('taskCoding.closeHistory') : t('taskCoding.history')}
           </button>
         </div>
 
         {historyOpen && (
           <div style={{ marginBottom: 16, paddingBottom: 12, borderBottom: '1px solid var(--border)' }}>
-            {historyLoading && <span className="status-neutral">Lädt…</span>}
+            {historyLoading && <span className="status-neutral">{t('taskCoding.loading')}</span>}
             {!historyLoading && historyList.length === 0 && (
-              <span className="status-neutral">Noch keine gespeicherten Läufe.</span>
+              <span className="status-neutral">{t('taskCoding.noSavedRuns')}</span>
             )}
             {!historyLoading &&
               historyList.map((h) => (
@@ -266,7 +267,7 @@ export default function TaskCoding({ onHandoffToWorkflow }: TaskCodingProps): Re
         )}
 
         <div className="field">
-          <label>Executor</label>
+          <label>{t('taskCoding.executorLabel')}</label>
           <div className="row">
             <select
               value={executorId}
@@ -280,29 +281,29 @@ export default function TaskCoding({ onHandoffToWorkflow }: TaskCodingProps): Re
               ))}
             </select>
             <button className="secondary" onClick={() => runDetect(executorId)}>
-              Verfügbarkeit prüfen
+              {t('taskCoding.checkAvailability')}
             </button>
             {status && (
               <span className={status.installed ? 'status-ok' : 'status-bad'}>
                 {status.installed
-                  ? `installiert (${status.version ?? '?'}) · Auth: ${status.authStatus}`
-                  : 'nicht gefunden'}
+                  ? t('taskCoding.installedWithVersion', { version: status.version ?? '?', status: status.authStatus })
+                  : t('taskCoding.notFound')}
               </span>
             )}
           </div>
         </div>
 
         <div className="field">
-          <label>Arbeitsverzeichnis</label>
+          <label>{t('taskCoding.workingDirLabel')}</label>
           <div className="row">
             <input
               type="text"
               value={workingDirectory}
               onChange={(e) => setWorkingDirectory(e.target.value)}
-              placeholder="C:\Pfad\zum\Projekt"
+              placeholder={t('taskCoding.pathPlaceholder')}
             />
             <button className="secondary" onClick={pickDirectory}>
-              Durchsuchen…
+              {t('taskCoding.browse')}
             </button>
           </div>
           <ProjectPicker
@@ -316,7 +317,7 @@ export default function TaskCoding({ onHandoffToWorkflow }: TaskCodingProps): Re
         </div>
 
         <div className="field">
-          <label>Rechte für diese Aufgabe</label>
+          <label>{t('taskCoding.permissionTierLabel')}</label>
           <select
             value={permissionTier}
             onChange={(e) => setPermissionTier(e.target.value as PermissionTier)}
@@ -331,18 +332,18 @@ export default function TaskCoding({ onHandoffToWorkflow }: TaskCodingProps): Re
         </div>
 
         <div className="field">
-          <label>Aufgabe</label>
+          <label>{t('taskCoding.taskLabel')}</label>
           <textarea
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
-            placeholder="z.B. Füge einen Dark-Mode-Toggle zur Settings-Seite hinzu."
+            placeholder={t('taskCoding.taskPlaceholder')}
           />
         </div>
 
         <div className="row" style={{ justifyContent: 'flex-end' }}>
           {running && (
             <button className="secondary" onClick={abort}>
-              Abbrechen
+              {t('taskCoding.cancel')}
             </button>
           )}
           <button
@@ -350,7 +351,7 @@ export default function TaskCoding({ onHandoffToWorkflow }: TaskCodingProps): Re
             onClick={run}
             disabled={running || !prompt.trim() || !workingDirectory.trim()}
           >
-            {running ? 'Läuft…' : 'Starten'}
+            {running ? t('taskCoding.running') : t('taskCoding.start')}
           </button>
         </div>
         {startError && (
@@ -373,11 +374,11 @@ export default function TaskCoding({ onHandoffToWorkflow }: TaskCodingProps): Re
                 value={followUp}
                 onChange={(e) => setFollowUp(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && !running && sendFollowUp()}
-                placeholder="Nachfrage stellen (setzt die Sitzung fort)…"
+                placeholder={t('taskCoding.followUpPlaceholder')}
                 disabled={running}
               />
               <button className="secondary" onClick={sendFollowUp} disabled={running || !followUp.trim()}>
-                Senden
+                {t('taskCoding.send')}
               </button>
             </div>
           )}
@@ -385,10 +386,10 @@ export default function TaskCoding({ onHandoffToWorkflow }: TaskCodingProps): Re
           {hasAnswer && !planPicker && (
             <div className="row" style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
               <button className="secondary" onClick={handoff} disabled={running}>
-                Letzte Antwort → An Workflow übergeben
+                {t('taskCoding.handoffToWorkflow')}
               </button>
               <span className="status-neutral" style={{ fontSize: 12 }}>
-                Übernimmt die letzte Antwort als Aufgabentext im Workflow-Tab (dort noch anpassbar)
+                {t('taskCoding.handoffHint')}
               </span>
             </div>
           )}
@@ -396,8 +397,7 @@ export default function TaskCoding({ onHandoffToWorkflow }: TaskCodingProps): Re
           {planPicker && (
             <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
               <p style={{ margin: '0 0 8px', fontSize: 13, color: 'var(--text-muted)' }}>
-                Die Antwort sieht nach mehreren Punkten aus. Welcher soll als konkrete Aufgabe an den
-                Workflow übergeben werden?
+                {t('taskCoding.planPickerIntro')}
               </p>
               {planPicker.map((item, i) => (
                 <div key={i} className="row" style={{ marginBottom: 6 }}>
@@ -408,10 +408,10 @@ export default function TaskCoding({ onHandoffToWorkflow }: TaskCodingProps): Re
               ))}
               <div className="row" style={{ marginTop: 8 }}>
                 <button className="secondary" onClick={handoffWholeText}>
-                  Stattdessen ganzen Text übergeben
+                  {t('taskCoding.handoffWholeText')}
                 </button>
                 <button className="secondary" onClick={() => setPlanPicker(null)}>
-                  Abbrechen
+                  {t('taskCoding.cancel')}
                 </button>
               </div>
             </div>

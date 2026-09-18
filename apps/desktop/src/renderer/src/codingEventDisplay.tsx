@@ -1,17 +1,18 @@
+import { useTranslation } from 'react-i18next'
 import type { CodingExecutorEvent } from '@ai-council/coding'
 import type { CodingLogEntry } from '../../main/ipc-types'
 
 /** Shared between TaskCoding and TaskWorkflow - same event vocabulary, same display rules. */
 
-export const STATUS_LABELS: Record<string, string> = {
-  init: 'Sitzung gestartet',
-  thinking_tokens: 'denkt nach…',
-  api_retry: 'Verbindung wird erneut versucht…',
-  plugin_install: 'Plugin wird installiert…',
-  'turn.started': 'Antwort wird erstellt…',
-  'thread.started': 'Sitzung gestartet',
-  status: 'wird bearbeitet…',
-  task_started: 'Aufgabe gestartet'
+export const STATUS_KEYS: Record<string, string> = {
+  init: 'codingEventDisplay.statusInit',
+  thinking_tokens: 'codingEventDisplay.statusThinkingTokens',
+  api_retry: 'codingEventDisplay.statusApiRetry',
+  plugin_install: 'codingEventDisplay.statusPluginInstall',
+  'turn.started': 'codingEventDisplay.statusTurnStarted',
+  'thread.started': 'codingEventDisplay.statusThreadStarted',
+  status: 'codingEventDisplay.statusGeneric',
+  task_started: 'codingEventDisplay.statusTaskStarted'
 }
 
 // LogEntry lives in ipc-types.ts (the shared main/preload/renderer boundary)
@@ -66,13 +67,14 @@ export function applyCodingEvent(prev: LogEntry[], event: CodingExecutorEvent): 
 }
 
 export function LogLine({ entry }: { entry: LogEntry }): React.JSX.Element {
+  const { t } = useTranslation()
   switch (entry.kind) {
     case 'text':
       return <div style={{ whiteSpace: 'pre-wrap', marginBottom: 8 }}>{entry.text}</div>
     case 'status':
       return (
         <div className="status-neutral" style={{ marginBottom: 4 }}>
-          {STATUS_LABELS[entry.message] ?? entry.message}
+          {STATUS_KEYS[entry.message] ? t(STATUS_KEYS[entry.message]) : entry.message}
           {entry.count > 1 && ` (${entry.count}×)`}
         </div>
       )
@@ -91,7 +93,7 @@ export function LogLine({ entry }: { entry: LogEntry }): React.JSX.Element {
           $ {entry.command}
           {entry.exitCode !== undefined && (
             <span className={entry.exitCode === 0 ? 'status-ok' : 'status-bad'} style={{ marginLeft: 8 }}>
-              exit {entry.exitCode}
+              {t('codingEventDisplay.exitLabel', { code: entry.exitCode })}
             </span>
           )}
         </div>
@@ -118,8 +120,8 @@ export function LogLine({ entry }: { entry: LogEntry }): React.JSX.Element {
     case 'done':
       return (
         <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
-          <span className="status-ok">Fertig</span>
-          {entry.sessionId && <span className="status-neutral"> · Session: {entry.sessionId}</span>}
+          <span className="status-ok">{t('codingEventDisplay.done')}</span>
+          {entry.sessionId && <span className="status-neutral"> {t('codingEventDisplay.sessionLabel', { sessionId: entry.sessionId })}</span>}
         </div>
       )
   }

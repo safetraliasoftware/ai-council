@@ -1,6 +1,7 @@
 import CouncilUsage from './CouncilUsage'
 import type { CouncilCallUsage } from '@ai-council/council-core'
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { ProviderId } from '@ai-council/shared'
 import { PROVIDER_LABELS } from '@ai-council/shared'
 import type { CouncilStage } from '@ai-council/council-core'
@@ -14,23 +15,23 @@ import type {
 import TaskGraphExecution from './TaskGraphExecution'
 
 const ALL_PROVIDERS: ProviderId[] = ['anthropic', 'openai', 'gemini']
-const STAGE_TITLES: Record<CouncilStage, string> = {
-  independent: 'Runde 1 – Unabhängige Entwürfe',
-  critique: 'Runde 2 – Kritik (anonymisiert)',
-  revision: 'Runde 3 – Überarbeitung',
-  synthesis: 'Runde 4 – Synthese'
+const STAGE_TITLE_KEYS: Record<CouncilStage, string> = {
+  independent: 'projectSpec.stageIndependent',
+  critique: 'projectSpec.stageCritique',
+  revision: 'projectSpec.stageRevision',
+  synthesis: 'projectSpec.stageSynthesis'
 }
-const STATUS_LABELS: Record<ProjectSpecification['status'], string> = {
-  draft: 'Entwurf',
-  council_generated: 'Vom Rat erzeugt – wartet auf Entscheidung',
-  human_approved: 'Genehmigt',
-  superseded: 'Ersetzt durch neuere Version',
-  rejected: 'Abgelehnt'
+const STATUS_KEYS: Record<ProjectSpecification['status'], string> = {
+  draft: 'projectSpec.statusDraft',
+  council_generated: 'projectSpec.statusCouncilGenerated',
+  human_approved: 'projectSpec.statusHumanApproved',
+  superseded: 'projectSpec.statusSuperseded',
+  rejected: 'projectSpec.statusRejected'
 }
-const TASK_GRAPH_STATUS_LABELS: Record<TaskGraphSnapshot['status'], string> = {
-  council_generated: 'Vom Rat erzeugt – wartet auf Entscheidung',
-  human_approved: 'Genehmigt',
-  rejected: 'Abgelehnt'
+const TASK_GRAPH_STATUS_KEYS: Record<TaskGraphSnapshot['status'], string> = {
+  council_generated: 'projectSpec.statusCouncilGenerated',
+  human_approved: 'projectSpec.statusHumanApproved',
+  rejected: 'projectSpec.statusRejected'
 }
 
 interface EntryState {
@@ -57,6 +58,7 @@ export interface ProjectSpecPrefill {
  * the plan at packages/task-graph for the full engine this feeds into.
  */
 export default function ProjectSpec({ prefill }: { prefill: ProjectSpecPrefill | null }): React.JSX.Element {
+  const { t } = useTranslation()
   const [projects, setProjects] = useState<ProjectSpecification[]>([])
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
   const [history, setHistory] = useState<ProjectSpecification[]>([])
@@ -155,7 +157,7 @@ export default function ProjectSpec({ prefill }: { prefill: ProjectSpecPrefill |
         try {
           const result = await window.api.projectSpec.setWorkingDirectory({ projectId: id, workingDirectory: prefill.workingDirectory! })
           if (result.ok) setProjectDirectory(prefill.workingDirectory)
-          else setDirectoryError(result.error ?? 'Ordner konnte nicht übernommen werden.')
+          else setDirectoryError(result.error ?? t('projectSpec.folderTakeoverFailed'))
         } finally {
           setDirectoryBusy(false)
         }
@@ -308,7 +310,7 @@ export default function ProjectSpec({ prefill }: { prefill: ProjectSpecPrefill |
     try {
       const result = await window.api.projectSpec.setWorkingDirectory({ projectId, workingDirectory })
       if (result.ok) setProjectDirectory(workingDirectory)
-      else setDirectoryError(result.error ?? 'Ordner konnte nicht eingerichtet werden.')
+      else setDirectoryError(result.error ?? t('projectSpec.folderSetupFailed'))
     } finally {
       setDirectoryBusy(false)
     }
@@ -325,7 +327,7 @@ export default function ProjectSpec({ prefill }: { prefill: ProjectSpecPrefill |
     const answeredQuestions = (latest?.openQuestions ?? [])
       .map((q, i) => ({ q, answer: questionAnswers[i]?.trim() }))
       .filter((x) => x.answer)
-      .map((x) => `Antwort auf "${x.q.text}": ${x.answer}`)
+      .map((x) => t('projectSpec.answerToQuestion', { question: x.q.text, answer: x.answer }))
       .join('\n')
     return [userNote.trim(), answeredQuestions].filter(Boolean).join('\n\n')
   }
@@ -348,7 +350,7 @@ export default function ProjectSpec({ prefill }: { prefill: ProjectSpecPrefill |
     }
     try {
       const { runId } = await window.api.projectSpec.generate(req)
-      if (!runId) throw new Error('Spezifikationslauf konnte nicht gestartet werden.')
+      if (!runId) throw new Error(t('projectSpec.specRunStartFailed'))
       currentRunId.current = runId
     } catch (err) {
       setRunning(false)
@@ -375,8 +377,8 @@ export default function ProjectSpec({ prefill }: { prefill: ProjectSpecPrefill |
       // further up, silently discarding the answers.
       const proceed = window.confirm(
         hasUnsentAnswers
-          ? 'Diese Spezifikation hat noch ungeklärte, blockierende offene Fragen - und du hast Antworten eingegeben, die noch NICHT an den Rat gesendet wurden (dafür "Antworten senden & neue Version anfordern" nutzen). Trotzdem ohne diese Antworten genehmigen?'
-          : 'Diese Spezifikation hat noch ungeklärte, blockierende offene Fragen. Trotzdem genehmigen?'
+          ? t('projectSpec.confirmApproveWithUnsentAnswers')
+          : t('projectSpec.confirmApproveWithBlockingQuestions')
       )
       if (!proceed) return
     }
@@ -406,7 +408,7 @@ export default function ProjectSpec({ prefill }: { prefill: ProjectSpecPrefill |
     }
     try {
       const { runId } = await window.api.taskGraph.generate(req)
-      if (!runId) throw new Error('Taskplanung konnte nicht gestartet werden. Spezifikation zuerst freigeben.')
+      if (!runId) throw new Error(t('projectSpec.taskGraphStartFailed'))
       taskGraphRunId.current = runId
     } catch (err) {
       setTaskGraphRunning(false)
@@ -435,14 +437,14 @@ export default function ProjectSpec({ prefill }: { prefill: ProjectSpecPrefill |
     <div>
       <div className="panel">
         <div className="row" style={{ justifyContent: 'space-between' }}>
-          <h3 style={{ margin: 0 }}>Projekte</h3>
+          <h3 style={{ margin: 0 }}>{t('projectSpec.projectsHeading')}</h3>
           <button className="secondary" onClick={startNewProject}>
-            + Neues Projekt
+            {t('projectSpec.newProject')}
           </button>
         </div>
         <div className="row" style={{ flexWrap: 'wrap', marginTop: 8 }}>
           {projects.length === 0 && (
-            <span className="status-neutral">Noch keine Projekt-Spezifikation erstellt.</span>
+            <span className="status-neutral">{t('projectSpec.noProjectsYet')}</span>
           )}
           {projects.map((p) => (
             <button
@@ -459,36 +461,36 @@ export default function ProjectSpec({ prefill }: { prefill: ProjectSpecPrefill |
       <div className="panel" style={{ marginTop: 16 }}>
         {selectedProjectId ? (
           <div className="field">
-            <label>Ziel dieses Projekts</label>
+            <label>{t('projectSpec.goalOfProjectLabel')}</label>
             <p style={{ marginTop: 0 }}>{goal}</p>
-            <label>Anmerkung für eine neue Version (was soll sich ändern?)</label>
+            <label>{t('projectSpec.revisionNoteLabel')}</label>
             <textarea
               value={userNote}
               onChange={(e) => setUserNote(e.target.value)}
-              placeholder="z.B. Die geplante Bibliothek unterstützt Requirement REQ-004 nicht - bitte Architektur anpassen."
+              placeholder={t('projectSpec.revisionNotePlaceholder')}
             />
           </div>
         ) : (
           <div className="field">
-            <label>Aufgabe</label>
+            <label>{t('projectSpec.taskLabel')}</label>
             <textarea
               value={goal}
               onChange={(e) => setGoal(e.target.value)}
-              placeholder="z.B. Baue eine Dienstplan-App für kleine Sicherheitsunternehmen."
+              placeholder={t('projectSpec.taskPlaceholder')}
             />
           </div>
         )}
 
         <div className="field">
-          <label>Projektordner {projectDirectory ? '' : '(optional, kann auch später festgelegt werden)'}</label>
+          <label>{t('projectSpec.workingDirLabel')}{projectDirectory ? '' : t('projectSpec.workingDirOptionalSuffix')}</label>
           {projectDirectory ? (
             <p className="status-neutral" style={{ marginTop: 0 }}>{projectDirectory}</p>
           ) : (
             <>
-              <input value={workingDirectory} onChange={(e) => setWorkingDirectory(e.target.value)} placeholder="z.B. C:\Projekte\mein-projekt" />
+              <input value={workingDirectory} onChange={(e) => setWorkingDirectory(e.target.value)} placeholder={t('projectSpec.workingDirPlaceholder')} />
               {workspaceRoot && (
                 <p className="status-neutral">
-                  Werkstatt-Ordner (aus den Einstellungen): {workspaceRoot} – lege dieses Projekt als eigenen Unterordner darin an.
+                  {t('projectSpec.workspaceRootHint', { path: workspaceRoot })}
                 </p>
               )}
               <div className="row">
@@ -501,11 +503,11 @@ export default function ProjectSpec({ prefill }: { prefill: ProjectSpecPrefill |
                     })()
                   }
                 >
-                  Durchsuchen
+                  {t('projectSpec.browse')}
                 </button>
                 {workspaceRoot && (
                   <button className="secondary" onClick={() => setWorkingDirectory(`${workspaceRoot}\\`)}>
-                    Im Werkstatt-Ordner anlegen
+                    {t('projectSpec.createInWorkspaceRoot')}
                   </button>
                 )}
                 <button
@@ -513,7 +515,7 @@ export default function ProjectSpec({ prefill }: { prefill: ProjectSpecPrefill |
                   disabled={directoryBusy || !workingDirectory.trim()}
                   onClick={() => void saveDirectory(selectedProjectId ?? draftProjectId)}
                 >
-                  {directoryBusy ? 'Läuft…' : 'Ordner setzen'}
+                  {directoryBusy ? t('projectSpec.running') : t('projectSpec.setFolder')}
                 </button>
               </div>
               {directoryError && <p className="error-text">{directoryError}</p>}
@@ -531,20 +533,20 @@ export default function ProjectSpec({ prefill }: { prefill: ProjectSpecPrefill |
             ))}
           </div>
           <div className="row">
-            <label style={{ margin: 0 }}>Planung:
+            <label style={{ margin: 0 }}>{t('projectSpec.planningLabel')}
               <select value={deliberation} disabled={running || taskGraphRunning}
                 onChange={(e) => setDeliberation(e.target.value as 'compact' | 'full')}>
-                <option value="compact">Kompakt – Entwürfe und Abschlussprüfung</option>
-                <option value="full">Ausführlich – zusätzlich Kritik und Überarbeitung</option>
+                <option value="compact">{t('projectSpec.deliberationCompact')}</option>
+                <option value="full">{t('projectSpec.deliberationFull')}</option>
               </select>
             </label>
-            <label style={{ margin: 0 }}>Projektumfang:
+            <label style={{ margin: 0 }}>{t('projectSpec.projectScopeLabel')}
               <select value={planningProfile} disabled={running || taskGraphRunning} onChange={e => setPlanningProfile(e.target.value as 'simple' | 'standard')}>
-                <option value="simple">Einfach – wenige vollständige Funktionen</option>
-                <option value="standard">Größer – mehrere Funktionsbereiche</option>
+                <option value="simple">{t('projectSpec.profileSimple')}</option>
+                <option value="standard">{t('projectSpec.profileStandard')}</option>
               </select>
             </label>
-            <label style={{ margin: 0 }}>Vorsitz:</label>
+            <label style={{ margin: 0 }}>{t('projectSpec.chairLabel')}</label>
             <select value={chairId} onChange={(e) => setChairId(e.target.value as ProviderId)} style={{ width: 140 }}>
               {selected.map((p) => (
                 <option key={p} value={p}>
@@ -556,17 +558,17 @@ export default function ProjectSpec({ prefill }: { prefill: ProjectSpecPrefill |
           <div className="row">
             {running && (
               <button className="secondary" onClick={cancel}>
-                Abbrechen
+                {t('projectSpec.cancel')}
               </button>
             )}
             <button className="primary" onClick={run} disabled={running || !canRun}>
-              {running ? 'Läuft…' : selectedProjectId ? 'Neue Version vom Rat anfordern' : 'Rat einberufen'}
+              {running ? t('projectSpec.running') : selectedProjectId ? t('projectSpec.requestNewVersion') : t('projectSpec.conveneCouncil')}
             </button>
           </div>
         </div>
         {selected.length < 2 && (
           <p className="status-neutral" style={{ marginBottom: 0 }}>
-            Mindestens 2 Anbieter auswählen – sonst gibt es niemanden zu kritisieren.
+            {t('projectSpec.minTwoProviders')}
           </p>
         )}
       </div>
@@ -578,7 +580,7 @@ export default function ProjectSpec({ prefill }: { prefill: ProjectSpecPrefill |
           if (entries.length === 0) return null
           return (
             <div key={stage} style={{ marginTop: 20 }}>
-              <h3 style={{ margin: '0 0 10px', fontSize: 14, color: 'var(--text-muted)' }}>{STAGE_TITLES[stage]}</h3>
+              <h3 style={{ margin: '0 0 10px', fontSize: 14, color: 'var(--text-muted)' }}>{t(STAGE_TITLE_KEYS[stage])}</h3>
               <div className="columns">
                 {entries.map(([providerId, entry]) => (
                   <div key={providerId} className="result-card">
@@ -586,19 +588,19 @@ export default function ProjectSpec({ prefill }: { prefill: ProjectSpecPrefill |
                       <span className={`provider-dot dot-${providerId}`} />
                       {PROVIDER_LABELS[providerId]}
                       {entry.label && <span className="badge" style={{ marginLeft: 6 }}>{entry.label}</span>}
-                      {!entry.done && <span className="status-neutral">läuft…</span>}
+                      {!entry.done && <span className="status-neutral">{t('projectSpec.runningShort')}</span>}
                     </div>
                     <div className="result-body">
                       {entry.warning && <div className="error-text">⚠ {entry.warning}</div>}
                       {entry.error ? (
                         <>
-                          <div className="error-text">⚠ Dieser Teilnehmer ist ausgefallen: {entry.error}</div>
+                          <div className="error-text">⚠ {t('projectSpec.participantFailed', { error: entry.error })}</div>
                           <div className="status-neutral" style={{ fontSize: 12, marginTop: 4 }}>
-                            Die übrigen Teilnehmer laufen unabhängig weiter.
+                            {t('projectSpec.othersContinue')}
                           </div>
                         </>
                       ) : (
-                        entry.text || <span className="status-neutral">Warte…</span>
+                        entry.text || <span className="status-neutral">{t('projectSpec.waiting')}</span>
                       )}
                     </div>
                   </div>
@@ -611,13 +613,13 @@ export default function ProjectSpec({ prefill }: { prefill: ProjectSpecPrefill |
 
       {result && !result.ok && (
         <div className="panel" style={{ marginTop: 20 }}>
-          <p className="error-text">Antwort konnte nicht als Spezifikation geparst werden: {result.error}</p>
+          <p className="error-text">{t('projectSpec.parseFailedError', { error: result.error })}</p>
           <div className="result-body" style={{ maxHeight: 300 }}>
             {result.rawText}
           </div>
           <div className="row" style={{ justifyContent: 'flex-end', marginTop: 8 }}>
             <button className="primary" onClick={run} disabled={running}>
-              Erneut generieren
+              {t('projectSpec.regenerate')}
             </button>
           </div>
         </div>
@@ -627,18 +629,18 @@ export default function ProjectSpec({ prefill }: { prefill: ProjectSpecPrefill |
         <div className="panel" style={{ marginTop: 20 }}>
           <div className="row" style={{ justifyContent: 'space-between' }}>
             <h3 style={{ margin: 0 }}>
-              Spezifikation v{latest.version}
+              {t('projectSpec.specVersionHeading', { version: latest.version })}
               {latest.supersedesVersion !== undefined && (
-                <span className="status-neutral"> (ersetzt v{latest.supersedesVersion})</span>
+                <span className="status-neutral"> {t('projectSpec.supersedesSuffix', { version: latest.supersedesVersion })}</span>
               )}
             </h3>
-            <span className="badge">{STATUS_LABELS[latest.status]}</span>
+            <span className="badge">{t(STATUS_KEYS[latest.status])}</span>
           </div>
           <p style={{ color: 'var(--text-muted)' }}>
-            Vorsitz der Synthese: {PROVIDER_LABELS[latest.chairId]}
+            {t('projectSpec.synthesisChairLine', { provider: PROVIDER_LABELS[latest.chairId] })}
           </p>
 
-          <h4>Anforderungen</h4>
+          <h4>{t('projectSpec.requirementsHeading')}</h4>
           {latest.requirements.map((r) => (
             <div key={r.id} className="result-card" style={{ marginBottom: 8, minHeight: 0 }}>
               <div className="result-header">
@@ -663,7 +665,7 @@ export default function ProjectSpec({ prefill }: { prefill: ProjectSpecPrefill |
 
           {latest.nonGoals.length > 0 && (
             <>
-              <h4>Nicht-Ziele</h4>
+              <h4>{t('projectSpec.nonGoalsHeading')}</h4>
               <ul>
                 {latest.nonGoals.map((n, i) => (
                   <li key={i}>{n}</li>
@@ -674,14 +676,14 @@ export default function ProjectSpec({ prefill }: { prefill: ProjectSpecPrefill |
 
           {latest.architectureNotes && (
             <>
-              <h4>Architektur-Notizen</h4>
+              <h4>{t('projectSpec.architectureNotesHeading')}</h4>
               <p>{latest.architectureNotes}</p>
             </>
           )}
 
           {latest.risks.length > 0 && (
             <>
-              <h4>Risiken</h4>
+              <h4>{t('projectSpec.risksHeading')}</h4>
               <ul>
                 {latest.risks.map((r, i) => (
                   <li key={i}>{r}</li>
@@ -692,27 +694,27 @@ export default function ProjectSpec({ prefill }: { prefill: ProjectSpecPrefill |
 
           {latest.openQuestions.length > 0 && (
             <>
-              <h4>Offene Fragen</h4>
+              <h4>{t('projectSpec.openQuestionsHeading')}</h4>
               <p style={{ color: 'var(--text-muted)', marginTop: 0, fontSize: 13 }}>
-                Antworten hier werden bei "Neue Version anfordern" automatisch an den Rat weitergegeben.
+                {t('projectSpec.openQuestionsHint')}
               </p>
               {latest.openQuestions.map((q, i) => (
                 <div key={i} className="field" style={{ marginBottom: 10 }}>
                   <label className={q.blocking ? 'error-text' : undefined} style={{ fontWeight: 400 }}>
-                    {q.blocking ? '⚠ blockierend: ' : ''}
+                    {q.blocking ? `⚠ ${t('projectSpec.blockingPrefix')}` : ''}
                     {q.text}
                   </label>
                   <textarea
                     value={questionAnswers[i] ?? ''}
                     onChange={(e) => setQuestionAnswers((a) => ({ ...a, [i]: e.target.value }))}
-                    placeholder="Antwort (optional)"
+                    placeholder={t('projectSpec.answerPlaceholder')}
                     style={{ minHeight: 44 }}
                   />
                 </div>
               ))}
               <div className="row" style={{ justifyContent: 'flex-end', marginBottom: 12 }}>
                 <button className="primary" onClick={run} disabled={running || !canRun}>
-                  {running ? 'Läuft…' : 'Antworten senden & neue Version anfordern'}
+                  {running ? t('projectSpec.running') : t('projectSpec.sendAnswersAndRequestVersion')}
                 </button>
               </div>
             </>
@@ -721,10 +723,10 @@ export default function ProjectSpec({ prefill }: { prefill: ProjectSpecPrefill |
           {latest.status === 'council_generated' && (
             <div className="row" style={{ justifyContent: 'flex-end', marginTop: 12 }}>
               <button className="secondary" onClick={reject}>
-                Ablehnen
+                {t('projectSpec.reject')}
               </button>
               <button className="primary" onClick={approve}>
-                Genehmigen
+                {t('projectSpec.approve')}
               </button>
             </div>
           )}
@@ -733,17 +735,17 @@ export default function ProjectSpec({ prefill }: { prefill: ProjectSpecPrefill |
             <div className="row" style={{ justifyContent: 'space-between', marginTop: 12 }}>
               <p className="status-neutral" style={{ margin: 0 }}>
                 {taskGraph
-                  ? `Taskgraph vorhanden (${taskGraph.tasks.length} Task${taskGraph.tasks.length === 1 ? '' : 's'})`
-                  : 'Noch kein Taskgraph erzeugt.'}
+                  ? (taskGraph.tasks.length === 1 ? t('projectSpec.taskGraphExistsSingular') : t('projectSpec.taskGraphExistsPlural', { count: taskGraph.tasks.length }))
+                  : t('projectSpec.noTaskGraphYet')}
               </p>
               <div className="row">
                 {taskGraphRunning && (
                   <button className="secondary" onClick={cancelTaskGraph}>
-                    Abbrechen
+                    {t('projectSpec.cancel')}
                   </button>
                 )}
                 <button className="primary" onClick={generateTaskGraph} disabled={taskGraphRunning}>
-                  {taskGraphRunning ? 'Läuft…' : taskGraph ? 'Taskgraph neu generieren' : 'Taskgraph generieren'}
+                  {taskGraphRunning ? t('projectSpec.running') : taskGraph ? t('projectSpec.regenerateTaskGraph') : t('projectSpec.generateTaskGraph')}
                 </button>
               </div>
             </div>
@@ -751,11 +753,11 @@ export default function ProjectSpec({ prefill }: { prefill: ProjectSpecPrefill |
 
           {history.length > 1 && (
             <>
-              <h4 style={{ marginTop: 16 }}>Versions-Historie</h4>
+              <h4 style={{ marginTop: 16 }}>{t('projectSpec.versionHistoryHeading')}</h4>
               {history.map((v) => (
                 <div key={v.version} className="row" style={{ justifyContent: 'flex-start', gap: 10 }}>
                   <span className="badge">v{v.version}</span>
-                  <span className="status-neutral">{STATUS_LABELS[v.status]}</span>
+                  <span className="status-neutral">{t(STATUS_KEYS[v.status])}</span>
                 </div>
               ))}
             </>
@@ -769,7 +771,7 @@ export default function ProjectSpec({ prefill }: { prefill: ProjectSpecPrefill |
         if (entries.length === 0) return null
         return (
           <div key={stage} style={{ marginTop: 20 }}>
-            <h3 style={{ margin: '0 0 10px', fontSize: 14, color: 'var(--text-muted)' }}>{STAGE_TITLES[stage]}</h3>
+            <h3 style={{ margin: '0 0 10px', fontSize: 14, color: 'var(--text-muted)' }}>{t(STAGE_TITLE_KEYS[stage])}</h3>
             <div className="columns">
               {entries.map(([providerId, entry]) => (
                 <div key={providerId} className="result-card">
@@ -777,11 +779,11 @@ export default function ProjectSpec({ prefill }: { prefill: ProjectSpecPrefill |
                     <span className={`provider-dot dot-${providerId}`} />
                     {PROVIDER_LABELS[providerId]}
                     {entry.label && <span className="badge" style={{ marginLeft: 6 }}>{entry.label}</span>}
-                    {!entry.done && <span className="status-neutral">läuft…</span>}
+                    {!entry.done && <span className="status-neutral">{t('projectSpec.runningShort')}</span>}
                   </div>
                   <div className="result-body">
                     {entry.warning && <div className="error-text">⚠ {entry.warning}</div>}
-                    {entry.error ? <span className="error-text">{entry.error}</span> : entry.text || <span className="status-neutral">Warte…</span>}
+                    {entry.error ? <span className="error-text">{entry.error}</span> : entry.text || <span className="status-neutral">{t('projectSpec.waiting')}</span>}
                   </div>
                 </div>
               ))}
@@ -792,13 +794,13 @@ export default function ProjectSpec({ prefill }: { prefill: ProjectSpecPrefill |
 
       {taskGraphResult && !taskGraphResult.ok && (
         <div className="panel" style={{ marginTop: 20 }}>
-          <p className="error-text">Taskgraph konnte nicht erzeugt werden: {taskGraphResult.error}</p>
+          <p className="error-text">{t('projectSpec.taskGraphGenerationFailed', { error: taskGraphResult.error })}</p>
           <div className="result-body" style={{ maxHeight: 300 }}>
             {taskGraphResult.rawText}
           </div>
           <div className="row" style={{ justifyContent: 'flex-end', marginTop: 8 }}>
             <button className="primary" onClick={generateTaskGraph} disabled={taskGraphRunning}>
-              Erneut generieren
+              {t('projectSpec.regenerate')}
             </button>
           </div>
         </div>
@@ -807,10 +809,10 @@ export default function ProjectSpec({ prefill }: { prefill: ProjectSpecPrefill |
       {taskGraph && (
         <div className="panel" style={{ marginTop: 20 }}>
           <div className="row" style={{ justifyContent: 'space-between' }}>
-            <h3 style={{ margin: 0 }}>Taskgraph (Spezifikation v{taskGraph.specVersion})</h3>
-            <span className="badge">{TASK_GRAPH_STATUS_LABELS[taskGraph.status]}</span>
+            <h3 style={{ margin: 0 }}>{t('projectSpec.taskGraphHeading', { version: taskGraph.specVersion })}</h3>
+            <span className="badge">{t(TASK_GRAPH_STATUS_KEYS[taskGraph.status])}</span>
           </div>
-          <p style={{ color: 'var(--text-muted)' }}>Vorsitz der Synthese: {PROVIDER_LABELS[taskGraph.chairId]}</p>
+          <p style={{ color: 'var(--text-muted)' }}>{t('projectSpec.synthesisChairLine', { provider: PROVIDER_LABELS[taskGraph.chairId] })}</p>
 
           {taskGraph.status === 'human_approved' ? (
             <TaskGraphExecution
@@ -825,28 +827,28 @@ export default function ProjectSpec({ prefill }: { prefill: ProjectSpecPrefill |
             />
           ) : (
             <>
-              {taskGraph.tasks.map((t) => (
-                <div key={t.id} className="result-card" style={{ marginBottom: 8, minHeight: 0 }}>
+              {taskGraph.tasks.map((task) => (
+                <div key={task.id} className="result-card" style={{ marginBottom: 8, minHeight: 0 }}>
                   <div className="result-header">
-                    <span className="badge">{t.id}</span>
-                    {t.requirementIds.map((r) => (
+                    <span className="badge">{task.id}</span>
+                    {task.requirementIds.map((r) => (
                       <span key={r} className="badge">
                         {r}
                       </span>
                     ))}
                   </div>
                   <div className="result-body">
-                    <div style={{ fontWeight: 600 }}>{t.title}</div>
-                    <div>{t.description}</div>
-                    {t.dependencies.length > 0 && (
+                    <div style={{ fontWeight: 600 }}>{task.title}</div>
+                    <div>{task.description}</div>
+                    {task.dependencies.length > 0 && (
                       <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-muted)' }}>
-                        hängt ab von:{' '}
-                        {t.dependencies.map((d) => `${d.taskId} (${d.impact})`).join(', ')}
+                        {t('projectSpec.dependsOn')}{' '}
+                        {task.dependencies.map((d) => `${d.taskId} (${d.impact})`).join(', ')}
                       </div>
                     )}
-                    {t.scope.allowedPaths.length > 0 && (
+                    {task.scope.allowedPaths.length > 0 && (
                       <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-muted)' }}>
-                        Bereich: {t.scope.allowedPaths.join(', ')}
+                        {t('projectSpec.scopeLabel')}{task.scope.allowedPaths.join(', ')}
                       </div>
                     )}
                   </div>
@@ -856,10 +858,10 @@ export default function ProjectSpec({ prefill }: { prefill: ProjectSpecPrefill |
               {taskGraph.status === 'council_generated' && (
                 <div className="row" style={{ justifyContent: 'flex-end', marginTop: 12 }}>
                   <button className="secondary" onClick={rejectTaskGraph}>
-                    Ablehnen
+                    {t('projectSpec.reject')}
                   </button>
                   <button className="primary" onClick={approveTaskGraph}>
-                    Genehmigen
+                    {t('projectSpec.approve')}
                   </button>
                 </div>
               )}
