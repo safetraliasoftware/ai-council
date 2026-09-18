@@ -1,8 +1,12 @@
+import CouncilUsage from './CouncilUsage'
+import type { CouncilCallUsage } from '@ai-council/council-core'
 import { useEffect, useRef, useState } from 'react'
 import type { ProviderId } from '@ai-council/shared'
 import { PROVIDER_LABELS } from '@ai-council/shared'
 import type { CouncilRunEvent } from '@ai-council/council-core'
-import type { SettingsState } from '../../../main/ipc-types'
+import type { AttachedArtifact, SettingsState } from '../../../main/ipc-types'
+import AttachmentPicker from '../AttachmentPicker'
+import CompanyTruthToggle from '../CompanyTruthToggle'
 
 const ALL_PROVIDERS: ProviderId[] = ['anthropic', 'openai', 'gemini']
 
@@ -11,6 +15,7 @@ interface ResultState {
   done: boolean
   error?: string
   outputTokens?: number
+  warning?: string
 }
 
 const EMPTY_RESULTS: Record<ProviderId, ResultState> = {
@@ -21,15 +26,18 @@ const EMPTY_RESULTS: Record<ProviderId, ResultState> = {
 
 export default function TaskParallel({ settings }: { settings: SettingsState }): React.JSX.Element {
   const [prompt, setPrompt] = useState('')
+  const [attachments, setAttachments] = useState<AttachedArtifact[]>([])
   const [selected, setSelected] = useState<ProviderId[]>(ALL_PROVIDERS)
   const [running, setRunning] = useState(false)
+  const [usage, setUsage] = useState<CouncilCallUsage[]>([])
   const [results, setResults] = useState<Record<ProviderId, ResultState>>(EMPTY_RESULTS)
+  const [startError, setStartError] = useState('')
   const currentRunId = useRef<string>('')
 
   useEffect(() => {
     const off = window.api.task.onEvent((e: CouncilRunEvent) => {
       if (e.kind === 'run_done') {
-        if (e.runId === currentRunId.current) setRunning(false)
+        if (e.runId === currentRunId.current) { setRunning(false); setUsage(e.usage ?? []) }
         return
       }
       if (e.runId !== currentRunId.current) return
@@ -45,6 +53,10 @@ export default function TaskParallel({ settings }: { settings: SettingsState }):
             return { ...r, [providerId]: { ...current, outputTokens: event.usage.outputTokens } }
           case 'error':
             return { ...r, [providerId]: { ...current, done: true, error: event.error.message } }
+          case 'warning':
+            return { ...r, [providerId]: { ...current, warning: event.message } }
+          case 'policy_violation':
+            return { ...r, [providerId]: { ...current, warning: event.message } }
           default:
             return r
         }
@@ -60,12 +72,23 @@ export default function TaskParallel({ settings }: { settings: SettingsState }):
   const run = async (): Promise<void> => {
     if (!prompt.trim() || selected.length === 0) return
     setRunning(true)
+    setUsage([])
+    setStartError('')
     setResults({
       anthropic: { text: '', done: !selected.includes('anthropic') },
       openai: { text: '', done: !selected.includes('openai') },
       gemini: { text: '', done: !selected.includes('gemini') }
     })
-    const { runId } = await window.api.task.runParallel({ prompt, providers: selected })
+    const { runId, error } = await window.api.task.runParallel({
+      prompt,
+      providers: selected,
+      attachments
+    })
+    if (!runId) {
+      setRunning(false)
+      setStartError(error ?? 'Lauf konnte nicht gestartet werden.')
+      return
+    }
     currentRunId.current = runId
   }
 
@@ -76,6 +99,7 @@ export default function TaskParallel({ settings }: { settings: SettingsState }):
 
   return (
     <div>
+      <CouncilUsage calls={usage} />
       <div className="panel">
         <div className="field">
           <label>Aufgabe</label>
@@ -84,6 +108,9 @@ export default function TaskParallel({ settings }: { settings: SettingsState }):
             onChange={(e) => setPrompt(e.target.value)}
             placeholder="z.B. Entwirf drei Social-Media-Post-Ideen für den Launch von Plaza OS."
           />
+        </div>
+        <div className="field">
+          <AttachmentPicker attachments={attachments} onChange={setAttachments} />
         </div>
         <div className="row" style={{ justifyContent: 'space-between' }}>
           <div className="row">
@@ -98,6 +125,7 @@ export default function TaskParallel({ settings }: { settings: SettingsState }):
                 {PROVIDER_LABELS[p]}
               </label>
             ))}
+            <CompanyTruthToggle />
           </div>
           <div className="row">
             {running && (
@@ -110,6 +138,11 @@ export default function TaskParallel({ settings }: { settings: SettingsState }):
             </button>
           </div>
         </div>
+        {startError && (
+          <p className="error-text" style={{ marginBottom: 0, whiteSpace: 'pre-line' }}>
+            {startError}
+          </p>
+        )}
       </div>
 
       <div className="columns">
@@ -128,6 +161,7 @@ export default function TaskParallel({ settings }: { settings: SettingsState }):
                 )}
               </div>
               <div className="result-body">
+                {r.warning && <div className="error-text">⚠ {r.warning}</div>}
                 {r.error ? (
                   <span className="error-text">{r.error}</span>
                 ) : (

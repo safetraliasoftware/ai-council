@@ -81,7 +81,14 @@ export class OpenAiCodexCliExecutor implements CodingExecutor {
   }
 
   startTask(spec: CodingTaskSpec, options?: StartTaskOptions): CodingExecutorHandle {
-    return this.run(['exec', ...sandboxArgs(spec), '--json', spec.prompt], spec, options)
+    // '-' + stdin, not the raw prompt as an argument - see spawn-process.ts's
+    // SpawnOptions.stdin doc for why: codex's globally-installed .cmd shim
+    // forwards args through a second cmd.exe layer that cross-spawn's
+    // escaping doesn't fully account for, so a sufficiently complex prompt
+    // can arrive corrupted. Caught live: a review-stage prompt reached
+    // codex as if empty, and it asked back for the task instead of reading
+    // the (correctly written) diff file it was pointed at.
+    return this.run(['exec', ...sandboxArgs(spec), '--json', '-'], spec, options)
   }
 
   resumeSession(
@@ -90,7 +97,7 @@ export class OpenAiCodexCliExecutor implements CodingExecutor {
     options?: StartTaskOptions
   ): CodingExecutorHandle {
     return this.run(
-      ['exec', 'resume', sessionId, ...sandboxArgs(spec), '--json', spec.prompt],
+      ['exec', 'resume', sessionId, ...resumeSandboxArgs(spec), '--json', '-'],
       spec,
       options
     )
@@ -122,7 +129,7 @@ export class OpenAiCodexCliExecutor implements CodingExecutor {
     const record: TaskRecord = {
       state: 'running',
       controller,
-      events: this.streamProcess(taskId, args, spec.workingDirectory, controller, (state) => {
+      events: this.streamProcess(taskId, args, spec.workingDirectory, spec.prompt, controller, (state) => {
         record.state = state
       })
     }
@@ -135,12 +142,17 @@ export class OpenAiCodexCliExecutor implements CodingExecutor {
     taskId: string,
     args: string[],
     cwd: string,
+    prompt: string,
     controller: AbortController,
     setState: (state: CodingTaskState) => void
   ): AsyncGenerator<CodingExecutorEvent> {
     yield { type: 'start', taskId }
 
-    const { child, exitCode } = spawnProcess(this.binary, args, { cwd, signal: controller.signal })
+    const { child, exitCode, killConfirmed } = spawnProcess(this.binary, args, {
+      cwd,
+      signal: controller.signal,
+      stdin: prompt
+    })
     let stderrTail = ''
     child.stderr.on('data', (chunk: Buffer) => {
       stderrTail = (stderrTail + chunk.toString('utf-8')).slice(-4000)
@@ -151,8 +163,14 @@ export class OpenAiCodexCliExecutor implements CodingExecutor {
     let agentText = ''
     let threadId: string | undefined
     let sawTerminal = false
+    let inputTokens: number | undefined, outputTokens: number | undefined
     try {
       for await (const raw of parseNdjson(child.stdout)) {
+        if (raw && typeof raw === 'object' && (raw as { type?: string }).type === 'turn.completed') {
+          const usage = (raw as { usage?: { input_tokens?: unknown; output_tokens?: unknown } }).usage
+          if (typeof usage?.input_tokens === 'number' && Number.isFinite(usage.input_tokens) && usage.input_tokens >= 0) inputTokens = (inputTokens ?? 0) + usage.input_tokens
+          if (typeof usage?.output_tokens === 'number' && Number.isFinite(usage.output_tokens) && usage.output_tokens >= 0) outputTokens = (outputTokens ?? 0) + usage.output_tokens
+        }
         const mapped = mapEvent(raw, (text) => (agentText += text))
         for (const m of mapped) {
           if (m.event.type === 'done' || m.event.type === 'error') sawTerminal = true
@@ -161,15 +179,24 @@ export class OpenAiCodexCliExecutor implements CodingExecutor {
         }
       }
     } catch (err) {
-      setState('error')
-      yield { type: 'error', message: err instanceof Error ? err.message : String(err) }
-      return
+      if (!controller.signal.aborted) {
+        setState('error')
+        yield { type: 'error', message: err instanceof Error ? err.message : String(err) }
+        return
+      }
     }
 
     const code = await exitCode
 
     if (controller.signal.aborted) {
       setState('aborted')
+      if (!killConfirmed()) {
+        yield {
+          type: 'warning',
+          message:
+            'Abbruch angefordert, aber der zugrunde liegende Prozess konnte nicht sicher beendet werden - er könnte noch im Hintergrund laufen.'
+        }
+      }
       return
     }
 
@@ -182,7 +209,7 @@ export class OpenAiCodexCliExecutor implements CodingExecutor {
           code: code === null ? undefined : String(code)
         }
       } else {
-        yield { type: 'done', summary: agentText, sessionId: threadId }
+        yield { type: 'done', summary: agentText, sessionId: threadId, inputTokens, outputTokens }
       }
     } else {
       setState(code === 0 ? 'done' : 'error')
@@ -201,22 +228,48 @@ const CHANGE_KIND_MAP: Record<string, 'created' | 'modified' | 'deleted'> = {
   delete: 'deleted'
 }
 
+type SandboxLevel = 'read-only' | 'workspace-write' | 'danger-full-access'
+
+function sandboxLevel(spec: CodingTaskSpec): SandboxLevel | undefined {
+  switch (spec.permissionTier) {
+    case 'read-write':
+      return 'workspace-write'
+    case 'full':
+      return 'danger-full-access'
+    case 'read-only':
+      return 'read-only'
+    case undefined:
+    default:
+      return undefined
+  }
+}
+
 /**
  * Translates the generic permission tier into Codex's --sandbox levels.
  * Leaving permissionTier unset means "don't pass --sandbox at all", which
- * is Codex's own out-of-the-box behavior (read-only sandbox by default).
+ * inherits the user's configuration. Explicit read-only MUST override it:
+ * a configured workspace-write default otherwise lets reviewers edit files.
  */
 function sandboxArgs(spec: CodingTaskSpec): string[] {
-  switch (spec.permissionTier) {
-    case 'read-write':
-      return ['--sandbox', 'workspace-write']
-    case 'full':
-      return ['--sandbox', 'danger-full-access']
-    case 'read-only':
-    case undefined:
-    default:
-      return []
-  }
+  const level = sandboxLevel(spec)
+  return level ? ['--sandbox', level] : []
+}
+
+/**
+ * `codex exec resume` does NOT accept the top-level `--sandbox` flag that
+ * `codex exec` does - live-verified: passing it produces "error: unexpected
+ * argument '--sandbox' found ... Usage: codex exec resume <SESSION_ID>
+ * [PROMPT]" and the process exits before running anything (caught live via
+ * the app's own "Nachfassen"/follow-up feature on an existing session).
+ * The `-c key=value` config override (documented on `codex exec resume
+ * --help` itself) reaches the same setting instead - live-verified
+ * end-to-end: starting a real session, then resuming it with
+ * `-c sandbox_mode="workspace-write"` in place of `--sandbox
+ * workspace-write` completes the turn successfully.
+ */
+function resumeSandboxArgs(spec: CodingTaskSpec): string[] {
+  const level = sandboxLevel(spec)
+  return level ? ['-c', `sandbox_mode="${level}"`] : []
 }
 
 /**

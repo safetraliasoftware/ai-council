@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import type { AIProvider, CouncilRequest, ProviderEvent, ProviderId } from '@ai-council/shared'
+import type { CouncilParticipant, CouncilParticipantEvent, CouncilRequest, ProviderId } from '@ai-council/shared'
 import { runCompare } from '../orchestrator/compare'
 
-/** Minimal hand-written AIProvider, exercising the contract like a real adapter would. */
-function makeMockProvider(id: ProviderId, reply: string): AIProvider {
+/** Minimal hand-written CouncilParticipant, exercising the contract like a real adapter would. */
+function makeMockProvider(id: ProviderId, reply: string): CouncilParticipant {
   return {
     id,
+    backend: 'api',
     capabilities: () => ({ streaming: true, tools: false, vision: false }),
-    async *generate(_request: CouncilRequest): AsyncIterable<ProviderEvent> {
+    async *generate(_request: CouncilRequest): AsyncIterable<CouncilParticipantEvent> {
       await Promise.resolve()
       yield { type: 'start', runId: 'mock-run' }
       await Promise.resolve()
@@ -18,11 +19,12 @@ function makeMockProvider(id: ProviderId, reply: string): AIProvider {
   }
 }
 
-function makeFailingProvider(id: ProviderId): AIProvider {
+function makeFailingProvider(id: ProviderId): CouncilParticipant {
   return {
     id,
+    backend: 'api',
     capabilities: () => ({ streaming: true, tools: false, vision: false }),
-    async *generate(): AsyncIterable<ProviderEvent> {
+    async *generate(): AsyncIterable<CouncilParticipantEvent> {
       yield { type: 'start', runId: 'mock-run' }
       yield {
         type: 'error',
@@ -57,7 +59,7 @@ describe('runCompare', () => {
     expect(events.filter((e) => e.kind === 'provider_event').every((e) => e.providerId === 'anthropic')).toBe(
       true
     )
-    expect(events.at(-1)).toEqual({ kind: 'run_done', runId: run.runId })
+    expect(events.at(-1)).toMatchObject({ kind: 'run_done', runId: run.runId })
 
     const doneEvent = events.find((e) => e.kind === 'provider_event' && e.event.type === 'done')
     expect(doneEvent).toBeDefined()
@@ -79,5 +81,21 @@ describe('runCompare', () => {
     )
     expect(anthropicDone).toBe(true)
     expect(openaiError).toBe(true)
+  })
+
+  it('rejects duplicate participant ids instead of silently dropping one', () => {
+    const claudeA = makeMockProvider('anthropic', 'a')
+    const claudeB = makeMockProvider('anthropic', 'b')
+    expect(() => runCompare([claudeA, claudeB], { messages: [{ role: 'user', content: 'hi' }] })).toThrow(
+      /Doppelter Council-Teilnehmer/
+    )
+  })
+
+  it('tags every event with the participant backend', async () => {
+    const claude = makeMockProvider('anthropic', 'hi')
+    const run = runCompare([claude], { messages: [{ role: 'user', content: 'hello' }] })
+    const events = []
+    for await (const event of run.events) events.push(event)
+    expect(events.filter((e) => e.kind === 'provider_event').every((e) => e.backend === 'api')).toBe(true)
   })
 })

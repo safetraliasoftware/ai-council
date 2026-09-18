@@ -1,6 +1,6 @@
-import { existsSync, readFileSync, writeFileSync } from 'fs'
 import type { ProviderId } from '@ai-council/shared'
 import { DEFAULT_MODELS } from '@ai-council/shared'
+import { readJsonFileSafe, writeJsonFileAtomic } from './json-file-store'
 
 /**
  * Non-secret model preferences, persisted separately from key material
@@ -18,31 +18,13 @@ export class ModelConfig {
   }
 
   static loadFromDisk(filePath: string): ModelConfig {
-    if (existsSync(filePath)) {
-      try {
-        const raw = JSON.parse(readFileSync(filePath, 'utf-8'))
-        return new ModelConfig(filePath, raw.models ?? {})
-      } catch {
-        // fall through to defaults on parse error
-      }
-    }
-    return new ModelConfig(filePath, {})
+    const raw = readJsonFileSafe<{ models?: Partial<Record<ProviderId, string>> }>(filePath, {})
+    return new ModelConfig(filePath, raw.models ?? {})
   }
 
   private persist(): void {
-    let existing: Record<string, unknown> = {}
-    if (existsSync(this.filePath)) {
-      try {
-        existing = JSON.parse(readFileSync(this.filePath, 'utf-8'))
-      } catch {
-        existing = {}
-      }
-    }
-    writeFileSync(
-      this.filePath,
-      JSON.stringify({ ...existing, models: this.models }, null, 2),
-      'utf-8'
-    )
+    const existing = readJsonFileSafe<Record<string, unknown>>(this.filePath, {})
+    writeJsonFileAtomic(this.filePath, { ...existing, models: this.models })
   }
 
   getModel(provider: ProviderId): string {

@@ -10,7 +10,10 @@ const workspacePackages = [
   '@ai-council/shared',
   '@ai-council/council-core',
   '@ai-council/providers',
-  '@ai-council/coding'
+  '@ai-council/coding',
+  '@ai-council/project-domain',
+  '@ai-council/task-graph',
+  '@ai-council/council-participants'
 ]
 
 export default defineConfig({

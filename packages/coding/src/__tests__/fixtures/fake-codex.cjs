@@ -15,7 +15,14 @@ if (argv.includes('--version')) {
 
 const execIndex = argv.indexOf('exec')
 const isResume = argv[execIndex + 1] === 'resume'
-const prompt = argv[argv.length - 1]
+let prompt = argv[argv.length - 1]
+if (prompt === '-') {
+  try {
+    prompt = require('fs').readFileSync(0, 'utf-8')
+  } catch {
+    prompt = ''
+  }
+}
 
 if (prompt === '__STREAM_OK__') {
   println({ type: 'thread.started', thread_id: 'thread-abc' })
@@ -68,9 +75,9 @@ if (prompt === '__RESUME_ECHO__') {
   process.exit(0)
 }
 
-if (prompt === '__ECHO_ARGS__') {
+if (typeof prompt === 'string' && prompt.startsWith('__ECHO_ARGS__')) {
   println({ type: 'thread.started', thread_id: 'thread-echo' })
-  println({ type: 'item.completed', item: { id: '1', type: 'agent_message', text: 'argv:' + JSON.stringify(argv) } })
+  println({ type: 'item.completed', item: { id: '1', type: 'agent_message', text: 'argv:' + JSON.stringify({ argv, prompt }) } })
   process.exit(0)
 }
 

@@ -17,7 +17,14 @@ if (argv[0] === 'auth' && argv[1] === 'status') {
 }
 
 const pIndex = argv.indexOf('-p')
-const prompt = pIndex >= 0 ? argv[pIndex + 1] : undefined
+let prompt = pIndex >= 0 ? argv[pIndex + 1] : undefined
+if (prompt === '-') {
+  try {
+    prompt = require('fs').readFileSync(0, 'utf-8')
+  } catch {
+    prompt = ''
+  }
+}
 
 if (prompt === '__STREAM_OK__') {
   println({ type: 'system', subtype: 'init', session_id: 'sess-123' })
@@ -26,12 +33,25 @@ if (prompt === '__STREAM_OK__') {
   println({ type: 'result', result: 'Hallo Welt', session_id: 'sess-123', total_cost_usd: 0.0042 })
   process.exit(0)
 }
+if (prompt === '__RESULT_THEN_FAIL__') {
+  println({ type: 'result', result: 'looks successful' })
+  process.stderr.write('failure after result\n')
+  process.exit(2)
+}
+if (prompt === '__ERROR_RESULT__') {
+  println({ type: 'result', is_error: true, subtype: 'error_during_execution', errors: ['review failed'] })
+  process.exit(0)
+}
 
 if (prompt === '__DENIED_TOOLS__') {
   println({ type: 'system', subtype: 'init', session_id: 'sess-denied' })
   println({
     type: 'assistant',
-    message: { content: [{ type: 'tool_use', name: 'Bash', input: { command: 'echo hi' } }] }
+    message: { content: [{ type: 'tool_use', id: 't1', name: 'Bash', input: { command: 'echo hi' } }] }
+  })
+  println({
+    type: 'user',
+    message: { content: [{ type: 'tool_result', tool_use_id: 't1', is_error: true, content: 'denied' }] }
   })
   println({
     type: 'result',
@@ -45,13 +65,37 @@ if (prompt === '__DENIED_TOOLS__') {
   process.exit(0)
 }
 
+if (prompt === '__COMMAND_OK__') {
+  println({ type: 'system', subtype: 'init', session_id: 'sess-cmd' })
+  println({
+    type: 'assistant',
+    message: { content: [{ type: 'tool_use', id: 'c1', name: 'Bash', input: { command: 'npm test' } }] }
+  })
+  println({
+    type: 'user',
+    message: { content: [{ type: 'tool_result', tool_use_id: 'c1', is_error: false, content: 'all good' }] }
+  })
+  println({
+    type: 'stream_event',
+    event: { type: 'content_block_delta', delta: { type: 'text_delta', text: 'Tests laufen durch.' } }
+  })
+  println({ type: 'result', result: 'Tests laufen durch.', session_id: 'sess-cmd' })
+  process.exit(0)
+}
+
+if (prompt === '__EXIT_CLEAN_NO_RESULT__') {
+  println({ type: 'system', subtype: 'init', session_id: 'sess-no-result' })
+  process.stderr.write('some diagnostic claude printed but never produced a result message\n')
+  process.exit(0)
+}
+
 if (prompt === '__FAIL__') {
   process.stderr.write('simulated failure\n')
   process.exit(2)
 }
 
-if (prompt === '__ECHO_ARGS__') {
-  println({ type: 'system', subtype: 'argv:' + JSON.stringify(argv) })
+if (typeof prompt === 'string' && prompt.startsWith('__ECHO_ARGS__')) {
+  println({ type: 'system', subtype: 'argv:' + JSON.stringify({ argv, prompt }) })
   println({ type: 'result', result: 'ok' })
   process.exit(0)
 }

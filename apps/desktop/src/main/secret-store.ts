@@ -1,6 +1,6 @@
 import { safeStorage } from 'electron'
-import { existsSync, readFileSync, writeFileSync } from 'fs'
 import type { ProviderId, SecretStore } from '@ai-council/shared'
+import { readJsonFileSafe, writeJsonFileAtomic } from './json-file-store'
 
 /**
  * The ONLY class in this codebase allowed to touch real API key material.
@@ -20,31 +20,13 @@ export class ElectronSecretStore implements SecretStore {
   }
 
   static loadFromDisk(filePath: string): ElectronSecretStore {
-    if (existsSync(filePath)) {
-      try {
-        const raw = JSON.parse(readFileSync(filePath, 'utf-8'))
-        return new ElectronSecretStore(filePath, raw.encryptedKeys ?? {})
-      } catch {
-        // fall through to empty store on parse error
-      }
-    }
-    return new ElectronSecretStore(filePath, {})
+    const raw = readJsonFileSafe<{ encryptedKeys?: Partial<Record<ProviderId, string>> }>(filePath, {})
+    return new ElectronSecretStore(filePath, raw.encryptedKeys ?? {})
   }
 
   private persist(): void {
-    let existing: Record<string, unknown> = {}
-    if (existsSync(this.filePath)) {
-      try {
-        existing = JSON.parse(readFileSync(this.filePath, 'utf-8'))
-      } catch {
-        existing = {}
-      }
-    }
-    writeFileSync(
-      this.filePath,
-      JSON.stringify({ ...existing, encryptedKeys: this.encryptedKeys }, null, 2),
-      'utf-8'
-    )
+    const existing = readJsonFileSafe<Record<string, unknown>>(this.filePath, {})
+    writeJsonFileAtomic(this.filePath, { ...existing, encryptedKeys: this.encryptedKeys })
   }
 
   hasKey(provider: ProviderId): boolean {

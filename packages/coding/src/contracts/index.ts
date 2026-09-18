@@ -16,7 +16,7 @@ export type CodingExecutorEvent =
   | { type: 'command'; command: string; exitCode?: number }
   | { type: 'test_result'; passed: boolean; summary: string }
   | { type: 'warning'; message: string }
-  | { type: 'done'; summary: string; sessionId?: string; costUsd?: number }
+  | { type: 'done'; summary: string; sessionId?: string; costUsd?: number; inputTokens?: number; outputTokens?: number }
   | { type: 'error'; message: string; code?: string }
 
 export type ExecutorAuthStatus = 'authenticated' | 'unauthenticated' | 'unknown'

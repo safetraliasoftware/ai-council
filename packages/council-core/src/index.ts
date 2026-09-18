@@ -1,4 +1,5 @@
 export * from './events'
+export type { CouncilCallUsage } from './run-usage'
 export * from './model-registry'
 export { runCompare } from './orchestrator/compare'
 export { runTeam } from './orchestrator/team'

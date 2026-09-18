@@ -1,14 +1,19 @@
+import CouncilUsage from './CouncilUsage'
+import type { CouncilCallUsage } from '@ai-council/council-core'
 import { useEffect, useRef, useState } from 'react'
 import type { ProviderId } from '@ai-council/shared'
 import { PROVIDER_LABELS } from '@ai-council/shared'
 import type { CouncilRunEvent, CouncilStage } from '@ai-council/council-core'
-import type { SettingsState } from '../../../main/ipc-types'
+import type { AttachedArtifact, SettingsState } from '../../../main/ipc-types'
+import AttachmentPicker from '../AttachmentPicker'
+import CompanyTruthToggle from '../CompanyTruthToggle'
 
 const ALL_PROVIDERS: ProviderId[] = ['anthropic', 'openai', 'gemini']
 const STAGE_TITLES: Record<CouncilStage, string> = {
   independent: 'Runde 1 – Unabhängige Antworten',
   critique: 'Runde 2 – Kritik (anonymisiert)',
-  synthesis: 'Runde 3 – Synthese'
+  revision: 'Runde 3 – Überarbeitung',
+  synthesis: 'Runde 4 – Synthese'
 }
 
 interface EntryState {
@@ -16,26 +21,37 @@ interface EntryState {
   done: boolean
   error?: string
   label?: string
+  warning?: string
 }
 
 type StageState = Partial<Record<ProviderId, EntryState>>
 
 export default function TaskCouncil({ settings }: { settings: SettingsState }): React.JSX.Element {
   const [prompt, setPrompt] = useState('')
+  const [attachments, setAttachments] = useState<AttachedArtifact[]>([])
   const [selected, setSelected] = useState<ProviderId[]>(ALL_PROVIDERS)
   const [chairId, setChairId] = useState<ProviderId>('anthropic')
+  // Normally a council needs >=2 to have anything to critique - but when
+  // only one local agent is installed, this lets a Smoke-Test run go
+  // through anyway (independent round only really means anything, but at
+  // least confirms the wiring end-to-end without a second participant).
+  const [allowSingleParticipant, setAllowSingleParticipant] = useState(false)
+  const minimumParticipants = allowSingleParticipant ? 1 : 2
   const [running, setRunning] = useState(false)
+  const [usage, setUsage] = useState<CouncilCallUsage[]>([])
   const [stages, setStages] = useState<Record<CouncilStage, StageState>>({
     independent: {},
     critique: {},
+    revision: {},
     synthesis: {}
   })
+  const [startError, setStartError] = useState('')
   const currentRunId = useRef<string>('')
 
   useEffect(() => {
     const off = window.api.task.onEvent((e: CouncilRunEvent) => {
       if (e.kind === 'run_done') {
-        if (e.runId === currentRunId.current) setRunning(false)
+        if (e.runId === currentRunId.current) { setRunning(false); setUsage(e.usage ?? []) }
         return
       }
       if (e.runId !== currentRunId.current || !e.stage) return
@@ -55,6 +71,12 @@ export default function TaskCouncil({ settings }: { settings: SettingsState }): 
           case 'error':
             next = { ...current, done: true, error: event.error.message, label }
             break
+          case 'warning':
+            next = { ...current, warning: event.message, label }
+            break
+          case 'policy_violation':
+            next = { ...current, warning: event.message, label }
+            break
           default:
             return s
         }
@@ -68,13 +90,25 @@ export default function TaskCouncil({ settings }: { settings: SettingsState }): 
     setSelected((s) => (s.includes(p) ? s.filter((x) => x !== p) : [...s, p]))
   }
 
-  const canRun = prompt.trim() && selected.length >= 2 && selected.includes(chairId)
+  const canRun = prompt.trim() && selected.length >= minimumParticipants && selected.includes(chairId)
 
   const run = async (): Promise<void> => {
     if (!canRun) return
     setRunning(true)
-    setStages({ independent: {}, critique: {}, synthesis: {} })
-    const { runId } = await window.api.task.runCouncil({ prompt, providers: selected, chairId })
+    setUsage([])
+    setStartError('')
+    setStages({ independent: {}, critique: {}, revision: {}, synthesis: {} })
+    const { runId, error } = await window.api.task.runCouncil({
+      prompt,
+      providers: selected,
+      chairId,
+      attachments
+    })
+    if (!runId) {
+      setRunning(false)
+      setStartError(error ?? 'Rat konnte nicht einberufen werden.')
+      return
+    }
     currentRunId.current = runId
   }
 
@@ -85,6 +119,7 @@ export default function TaskCouncil({ settings }: { settings: SettingsState }): 
 
   return (
     <div>
+      <CouncilUsage calls={usage} />
       <div className="panel">
         <div className="field">
           <label>Aufgabe für den Rat</label>
@@ -93,6 +128,9 @@ export default function TaskCouncil({ settings }: { settings: SettingsState }): 
             onChange={(e) => setPrompt(e.target.value)}
             placeholder="z.B. Sollten wir eine native iOS-App für §34a Sachkunde PRO entwickeln?"
           />
+        </div>
+        <div className="field">
+          <AttachmentPicker attachments={attachments} onChange={setAttachments} />
         </div>
         <div className="row" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
           <div className="row">
@@ -107,6 +145,16 @@ export default function TaskCouncil({ settings }: { settings: SettingsState }): 
                 {PROVIDER_LABELS[p]}
               </label>
             ))}
+            <CompanyTruthToggle />
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, margin: 0 }}>
+              <input
+                type="checkbox"
+                checked={allowSingleParticipant}
+                onChange={(e) => setAllowSingleParticipant(e.target.checked)}
+                style={{ width: 'auto' }}
+              />
+              Nur 1 Teilnehmer erlauben (Smoke-Test)
+            </label>
           </div>
           <div className="row">
             <label style={{ margin: 0 }}>Vorsitz:</label>
@@ -129,9 +177,16 @@ export default function TaskCouncil({ settings }: { settings: SettingsState }): 
             </button>
           </div>
         </div>
-        {selected.length < 2 && (
-          <p className="status-neutral" style={{ marginBottom: 0 }}>
-            Mindestens 2 Anbieter auswählen – sonst gibt es niemanden zu kritisieren.
+        {selected.length < minimumParticipants && (
+          <p className="status-neutral" style={{ marginBottom: 0, whiteSpace: 'pre-line' }}>
+            {allowSingleParticipant
+              ? 'Mindestens 1 Anbieter auswählen.'
+              : 'Mindestens 2 Anbieter auswählen – sonst gibt es niemanden zu kritisieren.'}
+          </p>
+        )}
+        {startError && (
+          <p className="error-text" style={{ marginBottom: 0, whiteSpace: 'pre-line' }}>
+            {startError}
           </p>
         )}
       </div>
@@ -158,8 +213,14 @@ export default function TaskCouncil({ settings }: { settings: SettingsState }): 
                     {!entry.done && <span className="status-neutral">läuft…</span>}
                   </div>
                   <div className="result-body">
+                    {entry.warning && <div className="error-text">⚠ {entry.warning}</div>}
                     {entry.error ? (
-                      <span className="error-text">{entry.error}</span>
+                      <>
+                        <div className="error-text">⚠ Dieser Teilnehmer ist ausgefallen: {entry.error}</div>
+                        <div className="status-neutral" style={{ fontSize: 12, marginTop: 4 }}>
+                          Die übrigen Teilnehmer laufen unabhängig weiter.
+                        </div>
+                      </>
                     ) : (
                       entry.text || <span className="status-neutral">Warte…</span>
                     )}

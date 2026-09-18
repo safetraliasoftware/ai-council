@@ -1,8 +1,12 @@
+import CouncilUsage from './CouncilUsage'
+import type { CouncilCallUsage } from '@ai-council/council-core'
 import { useEffect, useRef, useState } from 'react'
 import type { ProviderId } from '@ai-council/shared'
 import { PROVIDER_LABELS } from '@ai-council/shared'
 import type { CouncilRunEvent } from '@ai-council/council-core'
-import type { SettingsState, TeamStepDto } from '../../../main/ipc-types'
+import type { AttachedArtifact, SettingsState, TeamStepDto } from '../../../main/ipc-types'
+import AttachmentPicker from '../AttachmentPicker'
+import CompanyTruthToggle from '../CompanyTruthToggle'
 
 const ALL_PROVIDERS: ProviderId[] = ['anthropic', 'openai', 'gemini']
 
@@ -10,22 +14,26 @@ interface StepResult {
   text: string
   done: boolean
   error?: string
+  warning?: string
 }
 
 export default function TaskTeam({ settings }: { settings: SettingsState }): React.JSX.Element {
   const [prompt, setPrompt] = useState('')
+  const [attachments, setAttachments] = useState<AttachedArtifact[]>([])
   const [steps, setSteps] = useState<TeamStepDto[]>([
     { provider: 'anthropic', roleInstruction: 'Erstelle einen ersten Entwurf.' },
     { provider: 'openai', roleInstruction: 'Überarbeite und verbessere den Entwurf.' }
   ])
   const [running, setRunning] = useState(false)
+  const [usage, setUsage] = useState<CouncilCallUsage[]>([])
   const [results, setResults] = useState<StepResult[]>([])
+  const [startError, setStartError] = useState('')
   const currentRunId = useRef<string>('')
 
   useEffect(() => {
     const off = window.api.task.onEvent((e: CouncilRunEvent) => {
       if (e.kind === 'run_done') {
-        if (e.runId === currentRunId.current) setRunning(false)
+        if (e.runId === currentRunId.current) { setRunning(false); setUsage(e.usage ?? []) }
         return
       }
       if (e.runId !== currentRunId.current || e.stepIndex === undefined) return
@@ -44,6 +52,14 @@ export default function TaskTeam({ settings }: { settings: SettingsState }): Rea
           case 'error':
             next[stepIndex] = { ...current, done: true, error: event.error.message }
             setRunning(false)
+            break
+          case 'warning':
+            next[stepIndex] = { ...current, warning: event.message }
+            break
+          case 'policy_violation':
+            next[stepIndex] = { ...current, warning: event.message }
+            break
+          default:
             break
         }
         return next
@@ -67,8 +83,20 @@ export default function TaskTeam({ settings }: { settings: SettingsState }): Rea
   const run = async (): Promise<void> => {
     if (!prompt.trim() || steps.length === 0) return
     setRunning(true)
+    setUsage([])
+    setStartError('')
     setResults(steps.map(() => ({ text: '', done: false })))
-    const { runId } = await window.api.task.runTeam({ prompt, steps })
+    const { runId, error } = await window.api.task.runTeam({ prompt, steps, attachments })
+    if (!runId) {
+      // An empty runId means the run never started (e.g. the same provider
+      // was picked for two steps) - without this, "Läuft…" was left stuck
+      // forever with no explanation.
+      setRunning(false)
+      setStartError(
+        'Team-Lauf konnte nicht gestartet werden - vermutlich wurde derselbe Anbieter mehrfach als Schritt ausgewählt.'
+      )
+      return
+    }
     currentRunId.current = runId
   }
 
@@ -79,6 +107,7 @@ export default function TaskTeam({ settings }: { settings: SettingsState }): Rea
 
   return (
     <div>
+      <CouncilUsage calls={usage} />
       <div className="panel">
         <div className="field">
           <label>Ausgangsaufgabe</label>
@@ -87,6 +116,12 @@ export default function TaskTeam({ settings }: { settings: SettingsState }): Rea
             onChange={(e) => setPrompt(e.target.value)}
             placeholder="z.B. Entwickle ein Konzept für die nächste Produktfeature-Ankündigung."
           />
+        </div>
+        <div className="field">
+          <AttachmentPicker attachments={attachments} onChange={setAttachments} />
+          <div style={{ marginTop: 8 }}>
+            <CompanyTruthToggle />
+          </div>
         </div>
 
         {steps.map((step, i) => (
@@ -110,7 +145,7 @@ export default function TaskTeam({ settings }: { settings: SettingsState }): Rea
                 ))}
               </select>
             </div>
-            <div className="field" style={{ marginBottom: 0 }}>
+            <div className="field" style={{ marginBottom: 0, whiteSpace: 'pre-line' }}>
               <label>Rolle / Anweisung</label>
               <textarea
                 value={step.roleInstruction}
@@ -126,6 +161,7 @@ export default function TaskTeam({ settings }: { settings: SettingsState }): Rea
                   {!results[i].done && <span className="status-neutral">läuft…</span>}
                 </div>
                 <div className="result-body" style={{ maxHeight: 260 }}>
+                  {results[i].warning && <div className="error-text">⚠ {results[i].warning}</div>}
                   {results[i].error ? (
                     <span className="error-text">{results[i].error}</span>
                   ) : (
@@ -156,6 +192,11 @@ export default function TaskTeam({ settings }: { settings: SettingsState }): Rea
             </button>
           </div>
         </div>
+        {startError && (
+          <p className="error-text" style={{ marginBottom: 0, whiteSpace: 'pre-line' }}>
+            {startError}
+          </p>
+        )}
       </div>
     </div>
   )

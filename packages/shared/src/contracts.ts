@@ -14,6 +14,8 @@ export const PROVIDER_LABELS: Record<ProviderId, string> = {
 export interface Usage {
   inputTokens?: number
   outputTokens?: number
+  /** Provider-reported value; not a subscription charge or remaining quota. */
+  costUsd?: number
 }
 
 export type CouncilErrorCode =

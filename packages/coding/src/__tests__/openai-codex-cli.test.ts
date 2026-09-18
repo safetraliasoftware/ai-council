@@ -127,12 +127,42 @@ describe('OpenAiCodexCliExecutor', () => {
       (e): e is Extract<CodingExecutorEvent, { type: 'text' }> => e.type === 'text' && e.text.startsWith('argv:')
     )
     expect(textEvent).toBeDefined()
-    const argv = JSON.parse(textEvent!.text.slice('argv:'.length))
-    expect(argv).toEqual(['exec', '--json', '__ECHO_ARGS__'])
-    expect(JSON.stringify(argv)).not.toMatch(/sk-|CODEX_API_KEY/i)
+    const { argv, prompt } = JSON.parse(textEvent!.text.slice('argv:'.length))
+    // The prompt itself now travels via stdin, not argv - see
+    // spawn-process.ts's SpawnOptions.stdin doc for why.
+    expect(argv).toEqual(['exec', '--json', '-'])
+    expect(prompt).toBe('__ECHO_ARGS__')
+    expect(JSON.stringify({ argv, prompt })).not.toMatch(/sk-|CODEX_API_KEY/i)
   })
 
-  it('translates permissionTier into --sandbox, and omits it for read-only/unset', async () => {
+  it('REGRESSION (globally-installed .cmd shim corrupting a prompt argument): the prompt travels via stdin, not argv, and survives shell-special characters intact', async () => {
+    // This is the exact failure caught live: a review-stage prompt reached
+    // the real codex CLI as if empty - it asked back for the task instead
+    // of reading the diff file it was pointed at. Root cause: codex's
+    // globally-installed .cmd shim (%APPDATA%\npm\codex.cmd, not inside
+    // node_modules/.bin/) proxies its args through a *second* cmd.exe layer
+    // via `%*`; cross-spawn's double-escaping heuristic only fires for
+    // node_modules/.bin/ shims, so a sufficiently complex prompt argument
+    // can still come out corrupted even with cross-spawn's normal escaping.
+    // Fix: never put the prompt in argv at all - write it to stdin and pass
+    // '-' instead, which codex documents as "read the prompt from stdin".
+    workDir = mkdtempSync(join(tmpdir(), 'coding-exec-'))
+    const executor = new OpenAiCodexCliExecutor(FAKE_CLI)
+    const dangerous =
+      '__ECHO_ARGS__ if (a && b) { x |= 1 } // 100% done <ok> "quoted" \'single\' ^caret & echo pwned'
+    const handle = executor.startTask({ prompt: dangerous, workingDirectory: workDir })
+    const events = await collect(handle.events)
+
+    const textEvent = events.find(
+      (e): e is Extract<CodingExecutorEvent, { type: 'text' }> => e.type === 'text' && e.text.startsWith('argv:')
+    )
+    expect(textEvent).toBeDefined()
+    const { argv, prompt } = JSON.parse(textEvent!.text.slice('argv:'.length))
+    expect(argv[argv.length - 1]).toBe('-')
+    expect(prompt).toBe(dangerous)
+  })
+
+  it('translates every explicit permissionTier into --sandbox, including read-only', async () => {
     workDir = mkdtempSync(join(tmpdir(), 'coding-exec-'))
     const executor = new OpenAiCodexCliExecutor(FAKE_CLI)
 
@@ -142,24 +172,59 @@ describe('OpenAiCodexCliExecutor', () => {
       const textEvent = events.find(
         (e): e is Extract<CodingExecutorEvent, { type: 'text' }> => e.type === 'text' && e.text.startsWith('argv:')
       )
-      return JSON.parse(textEvent!.text.slice('argv:'.length))
+      return JSON.parse(textEvent!.text.slice('argv:'.length)).argv
     }
 
-    expect(await argvFor(undefined)).toEqual(['exec', '--json', '__ECHO_ARGS__'])
-    expect(await argvFor('read-only')).toEqual(['exec', '--json', '__ECHO_ARGS__'])
-    expect(await argvFor('read-write')).toEqual([
-      'exec',
-      '--sandbox',
-      'workspace-write',
-      '--json',
-      '__ECHO_ARGS__'
+    expect(await argvFor(undefined)).toEqual(['exec', '--json', '-'])
+    expect(await argvFor('read-only')).toEqual(['exec', '--sandbox', 'read-only', '--json', '-'])
+    expect(await argvFor('read-write')).toEqual(['exec', '--sandbox', 'workspace-write', '--json', '-'])
+    expect(await argvFor('full')).toEqual(['exec', '--sandbox', 'danger-full-access', '--json', '-'])
+  })
+
+  it('REGRESSION (`codex exec resume` rejects `--sandbox`): resumeSession() passes the sandbox level as a -c config override instead', async () => {
+    // Live-verified against the real CLI: `codex exec resume <id> --sandbox
+    // workspace-write` fails with "unexpected argument '--sandbox' found"
+    // before running anything - the resume subcommand has no --sandbox flag,
+    // only startTask's plain `codex exec` does. `-c sandbox_mode="..."` is
+    // the documented, live-confirmed equivalent that resume does accept.
+    workDir = mkdtempSync(join(tmpdir(), 'coding-exec-'))
+    const executor = new OpenAiCodexCliExecutor(FAKE_CLI)
+
+    async function resumeArgvFor(permissionTier?: 'read-only' | 'read-write' | 'full'): Promise<string[]> {
+      const handle = executor.resumeSession('session-xyz', {
+        prompt: '__ECHO_ARGS__',
+        workingDirectory: workDir,
+        permissionTier
+      })
+      const events = await collect(handle.events)
+      const textEvent = events.find(
+        (e): e is Extract<CodingExecutorEvent, { type: 'text' }> => e.type === 'text' && e.text.startsWith('argv:')
+      )
+      return JSON.parse(textEvent!.text.slice('argv:'.length)).argv
+    }
+
+    expect(await resumeArgvFor(undefined)).toEqual(['exec', 'resume', 'session-xyz', '--json', '-'])
+    expect(await resumeArgvFor('read-only')).toEqual([
+      'exec', 'resume', 'session-xyz', '-c', 'sandbox_mode="read-only"', '--json', '-'
     ])
-    expect(await argvFor('full')).toEqual([
+    expect(await resumeArgvFor('read-write')).toEqual([
       'exec',
-      '--sandbox',
-      'danger-full-access',
+      'resume',
+      'session-xyz',
+      '-c',
+      'sandbox_mode="workspace-write"',
       '--json',
-      '__ECHO_ARGS__'
+      '-'
     ])
+    expect(await resumeArgvFor('full')).toEqual([
+      'exec',
+      'resume',
+      'session-xyz',
+      '-c',
+      'sandbox_mode="danger-full-access"',
+      '--json',
+      '-'
+    ])
+    expect(await resumeArgvFor('read-write')).not.toContain('--sandbox')
   })
 })

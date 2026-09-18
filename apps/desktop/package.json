@@ -14,15 +14,20 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@ai-council/shared": "*",
-    "@ai-council/council-core": "*",
-    "@ai-council/providers": "*",
     "@ai-council/coding": "*",
+    "@ai-council/council-core": "*",
+    "@ai-council/council-participants": "*",
+    "@ai-council/project-domain": "*",
+    "@ai-council/providers": "*",
+    "@ai-council/shared": "*",
+    "@ai-council/task-graph": "*",
+    "better-sqlite3": "^13.0.3",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },
   "devDependencies": {
     "@electron-toolkit/utils": "^4.0.0",
+    "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^24.0.0",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",

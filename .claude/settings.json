@@ -1,0 +1,29 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"C:\\Users\\Andre\\Desktop\\ai-council\\.claude\\hooks\\typecheck-on-edit.cjs\"",
+            "timeout": 60,
+            "statusMessage": "Typprüfung..."
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"C:\\Users\\Andre\\Desktop\\ai-council\\.claude\\hooks\\confirm-secret-store-edit.cjs\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
