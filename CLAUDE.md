@@ -16,9 +16,27 @@ npm workspaces monorepo (`packages/*`, `apps/*`), no separate install step per p
 - `npx vitest run path/to/file.test.ts` — one file. Add `-t "substring of the test name"` to run a single test/describe block.
 - `npm run dev` — launches the Electron app (`apps/desktop`) for interactive use — use this to actually see a UI change before calling it done, not just the test suite.
 - `npm run build` — production build of the desktop app only (`electron-vite build`).
-- `npm run dist --workspace=@ai-council/desktop` — packages the app for distribution (`electron-builder`).
+- `npm run dist --workspace=@ai-council/desktop` — packages the app for distribution (`electron-builder`), per `apps/desktop/electron-builder.yml`. Does **not** publish - it only writes local files under `apps/desktop/dist/`.
 
 No linter/formatter is configured (no ESLint/Prettier config in the repo).
+
+## Releasing an update
+
+The app auto-updates itself against GitHub Releases on `safetraliasoftware/ai-council` (`apps/desktop/src/main/auto-updater.ts`, wraps `electron-updater`; no-ops outside a packaged build). To ship a new version:
+
+1. Bump `apps/desktop/package.json`'s `version` (SemVer — `electron-updater` compares this against the latest published GitHub release tag).
+2. Commit and push.
+3. Publish the build. `gh auth token` reuses the already-authenticated `gh` CLI session's token (has `repo` scope) instead of minting a separate one:
+   ```bash
+   GH_TOKEN=$(gh auth token) npm run dist --workspace=@ai-council/desktop -- --publish always
+   ```
+4. **Verify there's exactly one release for the new tag, not two.** Caught live on the very first release: the `nsis` and `portable` targets each raced to create the GitHub release for a brand-new tag, landing two separate draft releases with the assets split between them instead of one. Check with:
+   ```bash
+   gh api repos/safetraliasoftware/ai-council/releases --jq '.[] | {tag_name, draft, assets: [.assets[].name]}'
+   ```
+   If duplicated: `gh release delete <tag> --yes` removes one, then `gh release upload <tag> <missing-file>` adds whatever asset the surviving release is missing (all four expected: the NSIS setup `.exe`, its `.blockmap`, the portable `.exe`, and `latest.yml`). `releaseType: release` in `electron-builder.yml` already avoids the separate "stuck in draft" problem — this dedup check is the one remaining manual step.
+
+This is a manual, deliberate process for every release — not automated by any script in this repo.
 
 ## Package layering
 

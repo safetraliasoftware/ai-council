@@ -1,6 +1,14 @@
 appId: com.aicouncil.desktop
 productName: AI Council
 electronVersion: 38.8.6
+publish:
+  provider: github
+  owner: safetraliasoftware
+  repo: ai-council
+  # Publish straight to a real release, not a draft - electron-updater only
+  # ever sees non-draft releases, and the default (draft) would need a
+  # manual undraft step after every single publish.
+  releaseType: release
 directories:
   output: dist
   buildResources: build
