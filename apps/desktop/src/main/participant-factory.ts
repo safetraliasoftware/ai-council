@@ -149,12 +149,12 @@ export function createParticipantFactory(
     if (availability.installed && availability.authStatus !== 'unauthenticated') {
       return useLocal()
     }
-    if (backendConfig.getAllowPaidApiFallback()) {
+    if (secretStore.getKey(id) || backendConfig.getAllowPaidApiFallback()) {
       return toApiCouncilParticipant(buildProvider(id))
     }
     return unavailableAgentParticipant(
       id,
-      `Kein lokaler Agent für ${id} verfügbar (nicht installiert oder nicht angemeldet) und API-Fallback ist deaktiviert. In den Einstellungen aktivieren oder den Agenten installieren/anmelden.`
+      `Kein lokaler Agent für ${id} verfügbar (nicht installiert oder nicht angemeldet) und kein API-Schlüssel hinterlegt. In den Einstellungen den Agenten einrichten oder einen Key speichern.`
     )
   }
   const prepare = async (ids: ProviderId[], workingDirectory?: string): Promise<CouncilParticipant[]> => {
@@ -173,11 +173,13 @@ export function createParticipantFactory(
           local = choice === 'local' || (availability.installed && availability.authStatus !== 'unauthenticated')
           if (local && !availability.installed) issues.push(`${id}: lokalen Agenten installieren; unter Einstellungen → Coding-Agenten prüfen.`)
           else if (local && availability.authStatus === 'unauthenticated') issues.push(`${id}: im lokalen Agenten anmelden und unter Einstellungen erneut prüfen.`)
-          if (!local && !backendConfig.getAllowPaidApiFallback()) issues.push(`${id}: kein angemeldeter lokaler Agent verfügbar; Einstellungen → Coding-Agenten prüfen. Der kostenpflichtige API-Fallback ist deaktiviert.`)
+          if (!local && !secretStore.getKey(id) && !backendConfig.getAllowPaidApiFallback()) {
+            issues.push(`${id}: kein angemeldeter lokaler Agent und kein API-Schlüssel. Agenten unter Einstellungen einrichten oder Key speichern.`)
+          }
         } catch (error) { issues.push(`${id}: Agentenerkennung fehlgeschlagen (${error instanceof Error ? error.message : String(error)}). Einstellungen prüfen.`); continue }
       }
       if (local) needsGit = true
-      else if (choice === 'api' || backendConfig.getAllowPaidApiFallback()) {
+      else if (choice === 'api' || secretStore.getKey(id) || backendConfig.getAllowPaidApiFallback()) {
         if (!secretStore.getKey(id)) issues.push(`${id}: gültigen API-Schlüssel unter Einstellungen hinterlegen.`)
         if (!modelConfig.getModel(id)?.trim()) issues.push(`${id}: ein Modell unter Einstellungen auswählen.`)
       }

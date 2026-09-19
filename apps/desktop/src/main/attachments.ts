@@ -5,5 +5,7 @@ export {
   classifyFile,
   isFileArtifact,
   toInputFiles,
-  withAttachments
+  withAttachments,
+  rememberAllowedAttachmentPath,
+  resetAllowedAttachmentPaths
 } from './attachment-files'

@@ -2,7 +2,13 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { classifyFile, toInputFiles, withAttachments } from '../attachments'
+import {
+  classifyFile,
+  rememberAllowedAttachmentPath,
+  resetAllowedAttachmentPaths,
+  toInputFiles,
+  withAttachments
+} from '../attachments'
 
 const PNG_1X1 = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
@@ -61,6 +67,7 @@ describe('toInputFiles', () => {
   let dir: string
 
   afterEach(() => {
+    resetAllowedAttachmentPaths()
     if (dir) rmSync(dir, { recursive: true, force: true })
   })
 
@@ -68,10 +75,20 @@ describe('toInputFiles', () => {
     dir = mkdtempSync(join(tmpdir(), 'ai-council-attach-'))
     const path = join(dir, 'shot.png')
     writeFileSync(path, PNG_1X1)
+    rememberAllowedAttachmentPath(path)
     const files = await toInputFiles([
       { kind: 'inline-text', label: 'notes', text: 'hi' },
       { kind: 'file', label: 'shot.png', path, mimeType: 'image/png', filename: 'shot.png' }
     ])
     expect(files).toEqual([{ filename: 'shot.png', mimeType: 'image/png', path }])
+  })
+
+  it('rejects a renderer-supplied path that was never picked in a file dialog', async () => {
+    dir = mkdtempSync(join(tmpdir(), 'ai-council-attach-'))
+    const path = join(dir, 'secret.png')
+    writeFileSync(path, PNG_1X1)
+    await expect(
+      toInputFiles([{ kind: 'file', label: 'secret.png', path, mimeType: 'image/png', filename: 'secret.png' }])
+    ).rejects.toThrow(/Dateiauswahl-Dialog/)
   })
 })

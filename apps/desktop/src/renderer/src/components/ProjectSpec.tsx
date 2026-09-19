@@ -14,8 +14,7 @@ import type {
 } from '../../../main/ipc-types'
 import TaskGraphExecution from './TaskGraphExecution'
 import { createRunEventGate } from '../runEventGate'
-
-const ALL_PROVIDERS: ProviderId[] = ['anthropic', 'openai', 'gemini', 'xai']
+import { ALL_PROVIDERS, useReadyProviderSelection } from '../provider-ready'
 const STAGE_TITLE_KEYS: Record<CouncilStage, string> = {
   independent: 'projectSpec.stageIndependent',
   critique: 'projectSpec.stageCritique',
@@ -82,7 +81,7 @@ export default function ProjectSpec({ prefill }: { prefill: ProjectSpecPrefill |
   // only being visible. Reset alongside userNote whenever the open project
   // or its spec version changes.
   const [questionAnswers, setQuestionAnswers] = useState<Record<number, string>>({})
-  const [selected, setSelected] = useState<ProviderId[]>(ALL_PROVIDERS)
+  const [selected, toggle] = useReadyProviderSelection()
   const [chairId, setChairId] = useState<ProviderId>('anthropic')
   const [deliberation, setDeliberation] = useState<'compact' | 'full'>('compact')
   const [planningProfile, setPlanningProfile] = useState<'simple' | 'standard'>('simple')
@@ -275,10 +274,6 @@ export default function ProjectSpec({ prefill }: { prefill: ProjectSpecPrefill |
       offGenerated()
     }
   }, [graphGate])
-
-  const toggle = (p: ProviderId): void => {
-    setSelected((s) => (s.includes(p) ? s.filter((x) => x !== p) : [...s, p]))
-  }
 
   const canRun = goal.trim() && selected.length >= 2 && selected.includes(chairId)
 

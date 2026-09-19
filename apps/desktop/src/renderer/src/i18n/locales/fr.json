@@ -70,13 +70,18 @@
     "backendApi": "API",
     "backendLocal": "{{agent}} (local)",
     "backendAuto": "Automatique",
-    "availableAuth": "disponible (authentification : {{status}})",
+    "availableAuth": "disponible ({{status}})",
+    "auth": {
+      "authenticated": "connecté",
+      "unauthenticated": "non connecté",
+      "unknown": "inconnu"
+    },
     "notInstalled": "non installé",
     "allowFallback": "Avec « Automatique » : basculer vers l'API payante si aucun agent local n'est disponible",
     "localAgentsHeading": "Configurer les agents IA locaux",
     "localAgentsIntro": "L'installation et la connexion peuvent être déclenchées directement ci-dessous - cela ouvre une fenêtre de terminal avec la commande officielle du fournisseur ; tu termines toi-même le reste (installation ou connexion via le navigateur). Le statut détecté ici se met à jour automatiquement dès que la CLI est disponible et connectée.",
     "officialGuide": "Guide officiel",
-    "installedAuth": "installé (authentification : {{status}})",
+    "installedAuth": "installé ({{status}})",
     "notFound": "introuvable",
     "checking": "vérification…",
     "installButton": "Installer",
@@ -415,7 +420,7 @@
     "noSavedRuns": "Aucune exécution enregistrée pour le moment.",
     "executorLabel": "Executor",
     "checkAvailability": "Vérifier la disponibilité",
-    "installedWithVersion": "installé ({{version}}) · auth : {{status}}",
+    "installedWithVersion": "installé ({{version}}) · {{status}}",
     "notFound": "introuvable",
     "workingDirLabel": "Répertoire de travail",
     "pathPlaceholder": "C:\\chemin\\vers\\le\\projet",
@@ -552,7 +557,7 @@
     "usageIntro2": "le quota restant exact d'un abonnement - il n'existe aucune source fiable pour cela, l'application affiche uniquement sa propre utilisation, réellement mesurée.",
     "faqHeading": "FAQ rapide",
     "faq1Question": "Je viens d'installer une CLI, mais l'application affiche toujours « {{status}} ».",
-    "faq1Answer": "Rouvre une fois les paramètres, ou redémarre l'application - sinon le chemin système (PATH) n'est pas relu.",
+    "faq1Answer": "Reviens à l'application – le statut et le chemin système (PATH) sont relus lorsque la fenêtre reprend le focus. S'il reste incorrect, redémarre l'application une fois.",
     "faq2Question": "Qu'est-ce que le « périmètre autorisé » (scope) d'une tâche ?",
     "faq2Answer": "Une tâche ne peut modifier que les fichiers/dossiers listés là - cela protège le reste du projet contre des modifications non voulues.",
     "versionUpdatesHeading": "Version et mises à jour",
@@ -567,6 +572,7 @@
   "onboarding": {
     "welcomeHeading": "Bienvenue sur AI Council",
     "welcomeIntro": "Configure ici au moins un fournisseur pour commencer : soit avec ta propre clé API, soit via l'un des agents IA pris en charge (Claude Code, Codex, Antigravity, Grok Build) - l'installation et la connexion peuvent être déclenchées directement ci-dessous, ce qui ouvre une fenêtre de terminal que tu termines toi-même. Tout ceci peut être modifié plus tard dans les paramètres, à tout moment.",
-    "continueButton": "Continuer vers l'application"
+    "continueButton": "Continuer vers l'application",
+    "continueNeedsProvider": "Configure au moins un fournisseur (clé API ou agent local connecté) avant de continuer."
   }
 }

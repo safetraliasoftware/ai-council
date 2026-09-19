@@ -106,21 +106,20 @@ export type XaiResponseContentPart =
   | { type: 'input_file'; filename: string; file_data: string }
 
 export async function toXaiResponseInput(text: string, files: InputFile[]): Promise<XaiResponseContentPart[]> {
-  const parts: XaiResponseContentPart[] = [{ type: 'input_text', text }]
+  const skipped: string[] = []
+  const parts: XaiResponseContentPart[] = []
   for (const file of files) {
     const loaded = await loadInputFile(file)
-    if (isPdf(loaded.mimeType)) {
-      throw new UnsupportedInputFileError(
-        `Grok kann ${file.filename} (PDF) nicht als Dateianhang lesen. Bilder nur JPEG/PNG.`
-      )
+    if (XAI_IMAGE_TYPES.has(loaded.mimeType)) {
+      parts.push({ type: 'input_image', image_url: dataUrl(loaded.mimeType, loaded.base64), detail: 'high' })
+      continue
     }
-    if (!XAI_IMAGE_TYPES.has(loaded.mimeType)) {
-      throw new UnsupportedInputFileError(
-        `Grok kann ${file.filename} (${file.mimeType}) nicht lesen. Bilder nur JPEG/PNG.`
-      )
-    }
-    parts.push({ type: 'input_image', image_url: dataUrl(loaded.mimeType, loaded.base64), detail: 'high' })
+    skipped.push(`${file.filename} (${file.mimeType})`)
   }
+  const note = skipped.length
+    ? `\n\n[Grok hat ${skipped.join(', ')} übersprungen — nur JPEG/PNG.]`
+    : ''
+  parts.unshift({ type: 'input_text', text: text + note })
   return parts
 }
 

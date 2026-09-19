@@ -1,5 +1,8 @@
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { SettingsState } from '../../../main/ipc-types'
+import type { CodingExecutorId, SettingsState } from '../../../main/ipc-types'
+import type { ExecutorAvailability } from '@ai-council/coding'
+import { readyProviderIds } from '../provider-ready'
 import Settings from './Settings'
 
 export default function Onboarding({
@@ -12,8 +15,16 @@ export default function Onboarding({
   onComplete: () => void
 }): React.JSX.Element {
   const { t } = useTranslation()
+  const [detectAll, setDetectAll] = useState<Partial<Record<CodingExecutorId, ExecutorAvailability>>>({})
+
+  useEffect(() => {
+    window.api.coding.detectAll().then(setDetectAll)
+  }, [settings])
+
+  const canContinue = readyProviderIds(settings, detectAll).length > 0
 
   const finish = async (): Promise<void> => {
+    if (!canContinue) return
     await window.api.settings.setHasCompletedOnboarding(true)
     onComplete()
   }
@@ -27,10 +38,15 @@ export default function Onboarding({
         </div>
         <Settings settings={settings} onChange={onSettingsChange} />
         <div className="row" style={{ justifyContent: 'flex-end', marginTop: 16 }}>
-          <button className="primary" onClick={finish}>
+          <button className="primary" onClick={finish} disabled={!canContinue}>
             {t('onboarding.continueButton')}
           </button>
         </div>
+        {!canContinue && (
+          <p className="status-neutral" style={{ textAlign: 'right', marginTop: 8 }}>
+            {t('onboarding.continueNeedsProvider')}
+          </p>
+        )}
       </div>
     </div>
   )

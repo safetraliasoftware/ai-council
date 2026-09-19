@@ -232,7 +232,7 @@ export default function Settings({
                   if (!status) return null
                   return (
                     <div className={status.installed ? 'status-ok' : 'status-bad'} style={{ fontSize: 12 }}>
-                      {status.installed ? t('settings.availableAuth', { status: status.authStatus }) : t('settings.notInstalled')}
+                      {status.installed ? t('settings.availableAuth', { status: t(`settings.auth.${status.authStatus}`) }) : t('settings.notInstalled')}
                     </div>
                   )
                 })()}
@@ -281,7 +281,7 @@ export default function Settings({
                 {t('settings.officialGuide')}
               </a>
               <span className={status?.installed ? 'status-ok' : 'status-bad'}>
-                {status ? (status.installed ? t('settings.installedAuth', { status: status.authStatus }) : t('settings.notFound')) : t('settings.checking')}
+                {status ? (status.installed ? t('settings.installedAuth', { status: t(`settings.auth.${status.authStatus}`) }) : t('settings.notFound')) : t('settings.checking')}
               </span>
             </div>
             {busy && (

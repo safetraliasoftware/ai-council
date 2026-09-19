@@ -70,13 +70,18 @@
     "backendApi": "API",
     "backendLocal": "{{agent}} (local)",
     "backendAuto": "Automatic",
-    "availableAuth": "available (auth: {{status}})",
+    "availableAuth": "available ({{status}})",
+    "auth": {
+      "authenticated": "signed in",
+      "unauthenticated": "not signed in",
+      "unknown": "unknown"
+    },
     "notInstalled": "not installed",
     "allowFallback": "With \"Automatic\": fall back to the paid API if no local agent is available",
     "localAgentsHeading": "Set up local AI agents",
     "localAgentsIntro": "Installation and sign-in can be triggered directly below - this opens a terminal window with the provider's official command; you finish the rest (installation or browser login) there yourself. The detected status here updates automatically once the CLI is available and signed in.",
     "officialGuide": "Official guide",
-    "installedAuth": "installed (auth: {{status}})",
+    "installedAuth": "installed ({{status}})",
     "notFound": "not found",
     "checking": "checking…",
     "installButton": "Install",
@@ -415,7 +420,7 @@
     "noSavedRuns": "No saved runs yet.",
     "executorLabel": "Executor",
     "checkAvailability": "Check availability",
-    "installedWithVersion": "installed ({{version}}) · auth: {{status}}",
+    "installedWithVersion": "installed ({{version}}) · {{status}}",
     "notFound": "not found",
     "workingDirLabel": "Working directory",
     "pathPlaceholder": "C:\\path\\to\\project",
@@ -552,7 +557,7 @@
     "usageIntro2": "the exact remaining quota of a subscription - there is no reliable source for that; the app only shows its own, actually measured usage.",
     "faqHeading": "Quick FAQ",
     "faq1Question": "I just installed a CLI, but the app still shows \"{{status}}\".",
-    "faq1Answer": "Reopen settings once, or restart the app - otherwise the system path (PATH) is not re-read.",
+    "faq1Answer": "Switch back to the app – status and the system path (PATH) are re-read when the window is focused. If it still looks wrong, restart the app once.",
     "faq2Question": "What is a task's \"allowed scope\"?",
     "faq2Answer": "A task may only change the files/folders listed there - this protects the rest of the project from unwanted changes.",
     "versionUpdatesHeading": "Version & updates",
@@ -567,6 +572,7 @@
   "onboarding": {
     "welcomeHeading": "Welcome to AI Council",
     "welcomeIntro": "Set up at least one provider here to get started: either with your own API key, or via one of the supported AI agents (Claude Code, Codex, Antigravity, Grok Build) - installation and sign-in can be triggered directly below, which opens a terminal window you finish yourself. Everything here can be changed later in Settings at any time.",
-    "continueButton": "Continue to the app"
+    "continueButton": "Continue to the app",
+    "continueNeedsProvider": "Set up at least one provider (API key or signed-in local agent) before continuing."
   }
 }

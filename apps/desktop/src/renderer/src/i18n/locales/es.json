@@ -70,13 +70,18 @@
     "backendApi": "API",
     "backendLocal": "{{agent}} (local)",
     "backendAuto": "Automático",
-    "availableAuth": "disponible (autenticación: {{status}})",
+    "availableAuth": "disponible ({{status}})",
+    "auth": {
+      "authenticated": "sesión iniciada",
+      "unauthenticated": "sin sesión",
+      "unknown": "desconocido"
+    },
     "notInstalled": "no instalado",
     "allowFallback": "Con «Automático»: recurrir a la API de pago si no hay ningún agente local disponible",
     "localAgentsHeading": "Configurar agentes de IA locales",
     "localAgentsIntro": "La instalación y el inicio de sesión se pueden iniciar directamente aquí abajo - esto abre una ventana de terminal con el comando oficial del proveedor; el resto (instalación o inicio de sesión en el navegador) lo completas tú mismo ahí. El estado detectado aquí se actualiza automáticamente en cuanto la CLI esté disponible y con la sesión iniciada.",
     "officialGuide": "Guía oficial",
-    "installedAuth": "instalado (autenticación: {{status}})",
+    "installedAuth": "instalado ({{status}})",
     "notFound": "no encontrado",
     "checking": "comprobando…",
     "installButton": "Instalar",
@@ -415,7 +420,7 @@
     "noSavedRuns": "Aún no hay ejecuciones guardadas.",
     "executorLabel": "Executor",
     "checkAvailability": "Comprobar disponibilidad",
-    "installedWithVersion": "instalado ({{version}}) · auth: {{status}}",
+    "installedWithVersion": "instalado ({{version}}) · {{status}}",
     "notFound": "no encontrado",
     "workingDirLabel": "Directorio de trabajo",
     "pathPlaceholder": "C:\\ruta\\al\\proyecto",
@@ -552,7 +557,7 @@
     "usageIntro2": "es la cuota restante exacta de una suscripción - no existe una fuente confiable para eso, la app solo muestra su propio uso, realmente medido.",
     "faqHeading": "FAQ rápida",
     "faq1Question": "Acabo de instalar una CLI, pero la app sigue mostrando \"{{status}}\".",
-    "faq1Answer": "Vuelve a abrir los ajustes una vez, o reinicia la app - de lo contrario la ruta del sistema (PATH) no se vuelve a leer.",
+    "faq1Answer": "Vuelve a la app – el estado y la ruta del sistema (PATH) se vuelven a leer al enfocar la ventana. Si sigue sin coincidir, reinicia la app una vez.",
     "faq2Question": "¿Qué es el \"ámbito permitido\" (scope) de una tarea?",
     "faq2Answer": "Una tarea solo puede modificar los archivos/carpetas listados ahí - esto protege el resto del proyecto de cambios no deseados.",
     "versionUpdatesHeading": "Versión y actualizaciones",
@@ -567,6 +572,7 @@
   "onboarding": {
     "welcomeHeading": "Bienvenido a AI Council",
     "welcomeIntro": "Configura aquí al menos un proveedor para empezar: ya sea con tu propia clave API, o mediante uno de los agentes de IA compatibles (Claude Code, Codex, Antigravity, Grok Build) - la instalación y el inicio de sesión se pueden iniciar directamente aquí abajo, lo que abre una ventana de terminal que completas tú mismo. Todo esto se puede cambiar más adelante en los ajustes, en cualquier momento.",
-    "continueButton": "Continuar a la aplicación"
+    "continueButton": "Continuar a la aplicación",
+    "continueNeedsProvider": "Configura al menos un proveedor (clave API o agente local con sesión iniciada) antes de continuar."
   }
 }

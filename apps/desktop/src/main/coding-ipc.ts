@@ -2,8 +2,11 @@ import { ipcMain, BrowserWindow, dialog, app } from 'electron'
 import { randomUUID } from 'node:crypto'
 import {
   mergeWorktree,
-  discardWorktree
+  discardWorktree,
+  refreshWindowsPath
 } from '@ai-council/coding'
+import { firstExistingDir } from './dialog-paths'
+import type { WorkspaceConfig } from './workspace-config'
 import type { CodingExecutor, ExecutorAvailability } from '@ai-council/coding'
 import type {
   CodingDetectResult,
@@ -40,13 +43,16 @@ import type { ProviderId } from '@ai-council/shared'
  */
 export function registerCodingIpcHandlers(
   getWindow: () => BrowserWindow | null,
-  executors: Record<CodingExecutorId, CodingExecutor>
+  executors: Record<CodingExecutorId, CodingExecutor>,
+  workspaceConfig: WorkspaceConfig
 ): void {
+  let lastPickedDirectory: string | undefined
   function send(win: BrowserWindow, channel: string, payload: unknown): void {
     if (!win.isDestroyed()) win.webContents.send(channel, payload)
   }
 
   ipcMain.handle('coding:detect', async (_e, executorId: CodingExecutorId): Promise<CodingDetectResult> => {
+    await refreshWindowsPath()
     const availability = await executors[executorId].detect()
     return availability
   })
@@ -54,6 +60,7 @@ export function registerCodingIpcHandlers(
   ipcMain.handle(
     'coding:detectAll',
     async (): Promise<Record<CodingExecutorId, ExecutorAvailability>> => {
+      await refreshWindowsPath()
       const ids = Object.keys(executors) as CodingExecutorId[]
       const entries = await Promise.all(ids.map(async (id) => [id, await executors[id].detect()] as const))
       return Object.fromEntries(entries) as Record<CodingExecutorId, ExecutorAvailability>
@@ -71,9 +78,13 @@ export function registerCodingIpcHandlers(
   ipcMain.handle('coding:pickDirectory', async (): Promise<string | undefined> => {
     const win = getWindow()
     if (!win) return undefined
-    const result = await dialog.showOpenDialog(win, { properties: ['openDirectory', 'createDirectory'] })
+    const result = await dialog.showOpenDialog(win, {
+      properties: ['openDirectory', 'createDirectory'],
+      defaultPath: firstExistingDir(lastPickedDirectory, workspaceConfig.getWorkspaceRoot(), app.getPath('documents'))
+    })
     if (result.canceled || result.filePaths.length === 0) return undefined
-    return result.filePaths[0]
+    lastPickedDirectory = result.filePaths[0]
+    return lastPickedDirectory
   })
 
   function forward(win: BrowserWindow, executorId: CodingExecutorId, handle: { taskId: string; events: AsyncIterable<CodingExecutorEvent> }, controller: AbortController, usage: UsageRecord): void {

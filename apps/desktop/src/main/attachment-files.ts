@@ -1,5 +1,5 @@
 import { stat } from 'node:fs/promises'
-import { extname } from 'node:path'
+import { extname, resolve } from 'node:path'
 import type { InputFile } from '@ai-council/shared'
 import { MAX_FILE_ATTACHMENTS, MAX_FILE_BYTES, type AttachedArtifact } from './ipc-types'
 
@@ -68,6 +68,22 @@ export function withAttachments(prompt: string, attachments: AttachedArtifact[] 
   return [prompt, ...blocks].join('\n\n')
 }
 
+const allowedAttachmentPaths = new Set<string>()
+
+export function rememberAllowedAttachmentPath(filePath: string): void {
+  allowedAttachmentPaths.add(resolve(filePath))
+}
+
+export function resetAllowedAttachmentPaths(): void {
+  allowedAttachmentPaths.clear()
+}
+
+function assertAllowedAttachmentPath(filePath: string, label: string): void {
+  if (!allowedAttachmentPaths.has(resolve(filePath))) {
+    throw new Error(`Anhang "${label}" stammt nicht aus einem Dateiauswahl-Dialog.`)
+  }
+}
+
 export async function toInputFiles(attachments: AttachedArtifact[] | undefined): Promise<InputFile[]> {
   if (!attachments || attachments.length === 0) return []
   const files: InputFile[] = []
@@ -76,6 +92,7 @@ export async function toInputFiles(attachments: AttachedArtifact[] | undefined):
     if (!artifact.path || !artifact.mimeType || !artifact.filename) {
       throw new Error(`Anhang "${artifact.label}" ist unvollständig (Pfad/Typ fehlt).`)
     }
+    assertAllowedAttachmentPath(artifact.path, artifact.label)
     const info = await stat(artifact.path)
     if (!info.isFile()) throw new Error(`Anhang "${artifact.filename}" ist keine Datei.`)
     if (info.size > MAX_FILE_BYTES) {

@@ -10,7 +10,7 @@ vi.mock('electron', () => ({
   app: { getPath: () => mockUserDataDir.current }
 }))
 
-const { appendEvent, replayProject, replayChangeRequests } = await import('../project-event-log')
+const { appendEvent, flushProjectEvents, replayProject, replayChangeRequests } = await import('../project-event-log')
 
 function fixtureSpec(overrides: Partial<ProjectSpecification> = {}): ProjectSpecification {
   return {
@@ -226,6 +226,18 @@ describe('project-event-log', () => {
       projectId: 'parallel', type: 'SpecificationDrafted', timestamp, payload: {}
     })))
     expect(events.map((event) => event.sequence)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+  })
+
+  it('flush drains a write that starts after the first queue snapshot', async () => {
+    await appendEvent('flush', {
+      projectId: 'flush', type: 'SpecificationCouncilGenerated', timestamp: 1000, payload: fixtureSpec()
+    })
+    const flushing = flushProjectEvents()
+    await appendEvent('flush', {
+      projectId: 'flush', type: 'SpecificationHumanApproved', timestamp: 2000, payload: { version: 1 }
+    })
+    await flushing
+    expect(replayProject('flush')[0]).toMatchObject({ status: 'human_approved' })
   })
 
   describe('replayChangeRequests', () => {

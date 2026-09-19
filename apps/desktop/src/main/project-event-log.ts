@@ -58,7 +58,11 @@ function parseLines(lines: string[]): ProjectEvent[] {
 const writeQueues = new Map<string, Promise<unknown>>()
 
 export async function flushProjectEvents(): Promise<void> {
-  await Promise.all([...writeQueues.values()])
+  for (let i = 0; i < 8; i++) {
+    const pending = [...writeQueues.values()]
+    if (pending.length === 0) return
+    await Promise.all(pending)
+  }
 }
 
 // Cache only the small UI projections, never legacy execution snapshots.

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { SettingsState } from '../../main/ipc-types'
+import type { CodingExecutorId, SettingsState } from '../../main/ipc-types'
+import type { ExecutorAvailability } from '@ai-council/coding'
+import { readyProviderIds } from './provider-ready'
 import Settings from './components/Settings'
 import TaskParallel from './components/TaskParallel'
 import TaskTeam from './components/TaskTeam'
@@ -19,6 +21,7 @@ export default function App(): React.JSX.Element {
   const [settings, setSettings] = useState<SettingsState | null>(null)
   const [projectSpecPrefill, setProjectSpecPrefill] = useState<ProjectSpecPrefill | null>(null)
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState<boolean | null>(null)
+  const [detectAll, setDetectAll] = useState<Partial<Record<CodingExecutorId, ExecutorAvailability>>>({})
 
   const reloadSettings = async (): Promise<void> => {
     setSettings(await window.api.settings.get())
@@ -27,9 +30,17 @@ export default function App(): React.JSX.Element {
   useEffect(() => {
     reloadSettings()
     window.api.settings.getHasCompletedOnboarding().then(setHasCompletedOnboarding)
+    const refreshDetect = (): void => {
+      window.api.coding.detectAll().then(setDetectAll)
+    }
+    refreshDetect()
     const openSettings = () => setTab('settings')
     window.addEventListener('ai-council:open-settings', openSettings)
-    return () => window.removeEventListener('ai-council:open-settings', openSettings)
+    window.addEventListener('focus', refreshDetect)
+    return () => {
+      window.removeEventListener('ai-council:open-settings', openSettings)
+      window.removeEventListener('focus', refreshDetect)
+    }
   }, [])
 
   // Coding's own implementerId doesn't map onto the Workflow tab - there
@@ -46,7 +57,8 @@ export default function App(): React.JSX.Element {
   // about, and "Automatisch" degrades gracefully on its own (see
   // participant-factory.ts) rather than silently failing.
   const anyKeyMissing = settings
-    ? Object.values(settings).some((s) => s.backend === 'api' && !s.hasKey)
+    ? Object.values(settings).some((s) => s.backend === 'api' && !s.hasKey) ||
+      readyProviderIds(settings, detectAll).length === 0
     : false
 
   if (settings === null || hasCompletedOnboarding === null) return <></>

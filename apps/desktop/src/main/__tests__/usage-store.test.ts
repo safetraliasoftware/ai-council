@@ -2,6 +2,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+import Database from 'better-sqlite3'
 const state = vi.hoisted(() => ({ dir: '' }))
 vi.mock('electron', () => ({ app: { getPath: () => state.dir } }))
 import { closeUsageStore, listUsage, recordCouncilUsage, saveUsage } from '../usage-store'
@@ -31,4 +32,16 @@ it('marks unfinished durable records as interrupted after restart', () => {
   saveUsage({ runId: 'running', kind: 'coding', startedAt: 1, status: 'running', calls: [{ backend: 'local_agent', inputChars: 1, outputChars: 0, durationMs: 0, outcome: 'running' }] })
   closeUsageStore()
   expect(listUsage()[0]).toMatchObject({ status: 'interrupted', calls: [{ outcome: 'interrupted' }] })
+})
+
+it('skips a poison JSON row instead of failing the whole store', () => {
+  state.dir = mkdtempSync(join(tmpdir(), 'usage-store-'))
+  saveUsage({ runId: 'good', kind: 'coding', startedAt: 1, status: 'completed', calls: [] })
+  closeUsageStore()
+  const db = new Database(join(state.dir, 'usage.db'))
+  db.prepare('INSERT INTO usage_runs VALUES (?, ?, ?, ?)').run('poison', null, 2, '{not-json')
+  db.close()
+  expect(() => listUsage()).not.toThrow()
+  const listed = listUsage()
+  expect(listed.map((row) => row.runId)).toEqual(['good'])
 })

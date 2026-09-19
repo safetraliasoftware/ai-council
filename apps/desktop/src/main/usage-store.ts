@@ -30,15 +30,24 @@ function database(): Database.Database {
     db.pragma('journal_mode = WAL')
     db.exec('CREATE TABLE IF NOT EXISTS usage_runs (run_id TEXT PRIMARY KEY, project_id TEXT, started_at INTEGER NOT NULL, record TEXT NOT NULL)')
     // A crashed process cannot truthfully report success or zero usage.
-    const rows = db.prepare('SELECT record FROM usage_runs').all() as { record: string }[]
+    const rows = db.prepare('SELECT run_id, record FROM usage_runs').all() as { run_id: string; record: string }[]
     const save = db.prepare('UPDATE usage_runs SET record = ? WHERE run_id = ?')
     db.transaction(() => {
       for (const row of rows) {
-        const record = JSON.parse(row.record) as UsageRecord
+        let record: UsageRecord
+        try {
+          record = JSON.parse(row.record) as UsageRecord
+        } catch {
+          continue
+        }
         if (record.status !== 'running') continue
         record.status = 'interrupted'
-        for (const call of record.calls) if (call.outcome === 'running') call.outcome = 'interrupted'
-        save.run(JSON.stringify(record), record.runId)
+        if (Array.isArray(record.calls)) {
+          for (const call of record.calls) if (call?.outcome === 'running') call.outcome = 'interrupted'
+        } else {
+          record.calls = []
+        }
+        save.run(JSON.stringify(record), record.runId ?? row.run_id)
       }
     })()
     connections.set(path, db)
@@ -57,7 +66,13 @@ export function listUsage(projectId?: string, limit = 200): UsageRecord[] {
   const rows = projectId
     ? database().prepare('SELECT record FROM usage_runs WHERE project_id = ? ORDER BY started_at DESC LIMIT ?').all(projectId, count)
     : database().prepare('SELECT record FROM usage_runs ORDER BY started_at DESC LIMIT ?').all(count)
-  return (rows as { record: string }[]).map(row => JSON.parse(row.record))
+  return (rows as { record: string }[]).flatMap((row) => {
+    try {
+      return [JSON.parse(row.record) as UsageRecord]
+    } catch {
+      return []
+    }
+  })
 }
 
 /** Register before the iterator is consumed: even the first paid call gets a durable start record. */

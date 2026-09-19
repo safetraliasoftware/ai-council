@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { existsSync } from 'node:fs'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'
@@ -621,6 +622,39 @@ describe('controlled project execution', { timeout: 60000 }, () => {
     const restarted = new ProjectEngine(ports)
     const state = await restarted.get('p')
     expect(state.attempts[0]).toMatchObject({ status: 'interrupted', events: ['evidence'] })
+  })
+  it('discards the task worktree and previous integration after a successful accept', async () => {
+    const engine = await configured()
+    await engine.start('p', 'T1', roles); await completed(engine)
+    const before = await engine.get('p')
+    const taskWorktreePath = before.attempts[0].worktree!.path
+    const previousIntegrationPath = before.integration!.path
+    expect(existsSync(taskWorktreePath)).toBe(true)
+    expect(existsSync(previousIntegrationPath)).toBe(true)
+    await engine.accept('p', 'T1')
+    const after = await engine.get('p')
+    expect(after.attempts[0].status).toBe('accepted')
+    expect(after.attempts[0].worktree).toBeUndefined()
+    expect(after.integration!.path).not.toBe(previousIntegrationPath)
+    expect(existsSync(taskWorktreePath)).toBe(false)
+    expect(existsSync(previousIntegrationPath)).toBe(false)
+    expect(existsSync(after.integration!.path)).toBe(true)
+  })
+  it('rejects a manual start while the serial scheduler owns the project', async () => {
+    const engine = await configured()
+    let finish!: () => void
+    const running = new Promise<void>(resolve => { finish = resolve })
+    const execute = vi.spyOn(engine as any, 'execute').mockImplementation(() => running)
+    try {
+      await engine.runReadyTasks('p', roles)
+      await vi.waitFor(() => expect(execute).toHaveBeenCalled())
+      await expect(engine.start('p', 'T1', roles)).rejects.toThrow(/bereits/)
+      engine.abort('p')
+    } finally {
+      finish()
+      await new Promise(resolve => setTimeout(resolve, 20))
+      execute.mockRestore()
+    }
   })
   it('serially executes ready dependencies and stops before the release gate', async () => {
     graph.tasks.push({ ...graph.tasks[0], id: 'T2', dependencies: [{ taskId: 'T1', impact: 'hard' }] })

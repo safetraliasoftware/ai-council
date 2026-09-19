@@ -123,6 +123,20 @@ describe('createParticipantFactory', () => {
     expect(events.map((e) => (e as { type: string }).type)).toEqual(['start', 'error'])
   })
 
+  it('"auto" uses a saved API key when local is unavailable even if fallback is disabled', async () => {
+    const secretStore = ElectronSecretStore.loadFromDisk(configPath)
+    secretStore.setKey('gemini', 'sk-test-key')
+    const modelConfig = ModelConfig.loadFromDisk(configPath)
+    const backendConfig = BackendConfig.loadFromDisk(configPath)
+    backendConfig.setBackend('gemini', 'auto')
+    expect(backendConfig.getAllowPaidApiFallback()).toBe(false)
+    const executors = allExecutors({ 'google-antigravity-cli': fakeExecutor({ installed: false, authStatus: 'unknown' }) })
+    const buildParticipant = createParticipantFactory(secretStore, modelConfig, executors, backendConfig)
+
+    const participant = await buildParticipant('gemini')
+    expect(participant.backend).toBe('api')
+  })
+
   it('"auto" falls back to the paid API when local is unavailable and fallback is enabled', async () => {
     const secretStore = ElectronSecretStore.loadFromDisk(configPath)
     const modelConfig = ModelConfig.loadFromDisk(configPath)

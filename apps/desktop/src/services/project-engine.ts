@@ -330,12 +330,12 @@ export class ProjectEngine {
     state.finalVerification = undefined
   }
 
-  async start(id: string, taskId: string, roles: RunRoles): Promise<{ workflowId: string }> {
+  async start(id: string, taskId: string, roles: RunRoles, fromScheduler = false): Promise<{ workflowId: string }> {
     this.assertRunning()
-    if (this.busy.has(id)) throw new Error('Für dieses Projekt läuft bereits eine Aktion.')
+    if (this.busy.has(id) || (this.schedulers.has(id) && !fromScheduler)) throw new Error('Für dieses Projekt läuft bereits eine Aktion.')
     const state = await this.get(id)
     this.assertRunning()
-    if (this.busy.has(id)) throw new Error('Für dieses Projekt läuft bereits eine Aktion.')
+    if (this.busy.has(id) || (this.schedulers.has(id) && !fromScheduler)) throw new Error('Für dieses Projekt läuft bereits eine Aktion.')
     if (state.phase === 'done') throw new Error('Projektlauf bereits freigegeben.')
     this.approved(id)
     const current = this.state(id)
@@ -344,7 +344,7 @@ export class ProjectEngine {
     await this.ports.preflight?.(graph.workingDirectory, current.commands,
       [roles.implementerId, roles.reviewerId, roles.challengerId].filter((value): value is string => !!value))
     this.assertRunning()
-    if (this.busy.has(id)) throw new Error('Für dieses Projekt läuft bereits eine Aktion.')
+    if (this.busy.has(id) || (this.schedulers.has(id) && !fromScheduler)) throw new Error('Für dieses Projekt läuft bereits eine Aktion.')
     const task = graph.tasks.find(t => t.id === taskId)
     if (!task) throw new Error('Task oder Abhängigkeiten sind nicht bereit.')
     // Dependency readiness applies to a revalidation start exactly like any
@@ -451,7 +451,7 @@ export class ProjectEngine {
           const state = this.state(id)
           const task = graph.tasks.find(t => t.status === 'pending' && t.dependencies.every(d => graph.tasks.find(t => t.id === d.taskId)?.status === 'accepted'))
           if (!task) break
-          await this.start(id, task.id, roles)
+          await this.start(id, task.id, roles, true)
           while (this.busy.has(id)) await new Promise(resolve => setTimeout(resolve, 100))
           if (this.stopRequested.has(id)) break
           const attempt = [...state.attempts].reverse().find(a => a.taskId === task.id)
@@ -945,7 +945,21 @@ export class ProjectEngine {
         if (signal.aborted) throw new Error('Abgebrochen.')
         if (state.finalVerification.length !== state.commands.length || state.finalVerification.some(v => !v.success)) throw new Error('Integrationsprüfung fehlgeschlagen. Erneut prüfen oder Versuch verwerfen und korrigieren.')
         if (candidateHead !== (await gitOutput(candidate.path, ['rev-parse', 'HEAD'])).trim() || (await gitOutput(candidate.path, ['status', '--porcelain'])).trim()) throw new Error('Integrationsprüfung hat den geprüften Stand verändert.')
+        const previousIntegration = integration
+        const taskWorktree = attempt.worktree
         state.integration = candidate
+        // Task worktrees are created from the previous integration path, so
+        // discard them first while that directory still exists. Use the
+        // original source repo as cwd so git bookkeeping stays reachable.
+        if (taskWorktree) {
+          try {
+            await discardWorktree({ ...taskWorktree, sourceRepo: previousIntegration.sourceRepo })
+          } catch { /* merged into candidate */ }
+          attempt.worktree = undefined
+        }
+        if (previousIntegration.path !== candidate.path) {
+          try { await discardWorktree(previousIntegration) } catch { /* previous integration no longer needed */ }
+        }
       } catch (err) {
         attempt.commit = undefined
         state.phase = 'halted'; state.haltReason = err instanceof Error ? err.message : String(err)

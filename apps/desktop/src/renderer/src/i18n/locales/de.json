@@ -70,13 +70,18 @@
     "backendApi": "API",
     "backendLocal": "{{agent}} (lokal)",
     "backendAuto": "Automatisch",
-    "availableAuth": "verfügbar (Auth: {{status}})",
+    "availableAuth": "verfügbar ({{status}})",
+    "auth": {
+      "authenticated": "angemeldet",
+      "unauthenticated": "nicht angemeldet",
+      "unknown": "unbekannt"
+    },
     "notInstalled": "nicht installiert",
     "allowFallback": "Bei \"Automatisch\": falls kein lokaler Agent verfügbar ist, auf die kostenpflichtige API ausweichen",
     "localAgentsHeading": "Lokale KI-Agenten einrichten",
     "localAgentsIntro": "Installation und Anmeldung lassen sich unten direkt anstoßen - dabei öffnet sich ein Terminal-Fenster mit dem offiziellen Befehl des jeweiligen Anbieters, den Rest (Installation bzw. Browser-Login) schließt du dort selbst ab. Der erkannte Status hier aktualisiert sich automatisch, sobald die CLI verfügbar und angemeldet ist.",
     "officialGuide": "Offizielle Anleitung",
-    "installedAuth": "installiert (Auth: {{status}})",
+    "installedAuth": "installiert ({{status}})",
     "notFound": "nicht gefunden",
     "checking": "prüfe…",
     "installButton": "Installieren",
@@ -415,7 +420,7 @@
     "noSavedRuns": "Noch keine gespeicherten Läufe.",
     "executorLabel": "Executor",
     "checkAvailability": "Verfügbarkeit prüfen",
-    "installedWithVersion": "installiert ({{version}}) · Auth: {{status}}",
+    "installedWithVersion": "installiert ({{version}}) · {{status}}",
     "notFound": "nicht gefunden",
     "workingDirLabel": "Arbeitsverzeichnis",
     "pathPlaceholder": "C:\\Pfad\\zum\\Projekt",
@@ -552,7 +557,7 @@
     "usageIntro2": "das exakte Restkontingent eines Abos - dafür gibt es keine verlässliche Quelle, die App zeigt nur die eigene, tatsächlich gemessene Nutzung.",
     "faqHeading": "Kurz-FAQ",
     "faq1Question": "Ich habe eine CLI gerade installiert, die App zeigt trotzdem \"{{status}}\".",
-    "faq1Answer": "Einstellungen einmal neu öffnen bzw. die App neu starten - der Systempfad (PATH) wird sonst nicht neu eingelesen.",
+    "faq1Answer": "Wechsle zurück zur App – Status und Systempfad (PATH) werden beim Fokus neu eingelesen. Falls es danach immer noch nicht stimmt, die App einmal neu starten.",
     "faq2Question": "Was ist der \"erlaubte Bereich\" (Scope) eines Tasks?",
     "faq2Answer": "Nur die dort gelisteten Dateien/Ordner darf ein Task ändern - das schützt den Rest des Projekts vor ungewollten Änderungen.",
     "versionUpdatesHeading": "Version & Updates",
@@ -567,6 +572,7 @@
   "onboarding": {
     "welcomeHeading": "Willkommen bei AI Council",
     "welcomeIntro": "Richte hier mindestens einen Anbieter ein, um loszulegen: entweder mit einem eigenen API-Key, oder über einen der unterstützten KI-Agenten (Claude Code, Codex, Antigravity, Grok Build) - Installation und Anmeldung lassen sich unten direkt anstoßen, öffnen dafür ein Terminal-Fenster, das du selbst zu Ende führst. Alles hier lässt sich jederzeit später in den Einstellungen ändern.",
-    "continueButton": "Weiter zur App"
+    "continueButton": "Weiter zur App",
+    "continueNeedsProvider": "Richte mindestens einen Anbieter ein (API-Schlüssel oder angemeldeter lokaler Agent), bevor du fortfährst."
   }
 }

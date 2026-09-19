@@ -12,7 +12,11 @@ const state = vi.hoisted(() => ({
 vi.mock('electron', () => ({ app: { getPath: () => state.dir },
   ipcMain: { handle: (name: string, fn: (...args: any[]) => any) => state.handlers.set(name, fn) }
 }))
-vi.mock('@ai-council/coding', () => ({ mergeWorktree: state.merge, discardWorktree: state.discard }))
+vi.mock('@ai-council/coding', () => ({
+  mergeWorktree: state.merge,
+  discardWorktree: state.discard,
+  refreshWindowsPath: async () => undefined
+}))
 import { registerCodingIpcHandlers } from '../coding-ipc'
 import { WorktreeStore } from '../worktree-store'
 
@@ -28,7 +32,9 @@ beforeEach(() => {
 afterEach(() => { rmSync(state.dir, { recursive: true, force: true }) })
 function restart() {
   state.handlers.clear()
-  registerCodingIpcHandlers(() => null, {} as Record<CodingExecutorId, CodingExecutor>)
+  registerCodingIpcHandlers(() => null, {} as Record<CodingExecutorId, CodingExecutor>, {
+    getWorkspaceRoot: () => undefined
+  } as import('../workspace-config').WorkspaceConfig)
 }
 
 it('merges after restart and keeps the resolution across another restart', async () => {

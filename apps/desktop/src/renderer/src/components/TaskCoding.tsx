@@ -316,7 +316,7 @@ export default function TaskCoding({ onHandoffToWorkflow }: TaskCodingProps): Re
             {status && (
               <span className={status.installed ? 'status-ok' : 'status-bad'}>
                 {status.installed
-                  ? t('taskCoding.installedWithVersion', { version: status.version ?? '?', status: status.authStatus })
+                  ? t('taskCoding.installedWithVersion', { version: status.version ?? '?', status: t(`settings.auth.${status.authStatus}`) })
                   : t('taskCoding.notFound')}
               </span>
             )}

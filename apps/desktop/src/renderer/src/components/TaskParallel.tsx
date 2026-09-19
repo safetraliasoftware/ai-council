@@ -10,7 +10,7 @@ import AttachmentPicker from '../AttachmentPicker'
 import CompanyTruthToggle from '../CompanyTruthToggle'
 import { createRunEventGate } from '../runEventGate'
 
-const ALL_PROVIDERS: ProviderId[] = ['anthropic', 'openai', 'gemini', 'xai']
+import { ALL_PROVIDERS, useReadyProviderSelection } from '../provider-ready'
 
 interface ResultState {
   text: string
@@ -31,7 +31,7 @@ export default function TaskParallel({ settings }: { settings: SettingsState }):
   const { t } = useTranslation()
   const [prompt, setPrompt] = useState('')
   const [attachments, setAttachments] = useState<AttachedArtifact[]>([])
-  const [selected, setSelected] = useState<ProviderId[]>(ALL_PROVIDERS)
+  const [selected, toggle] = useReadyProviderSelection(settings)
   const [running, setRunning] = useState(false)
   const [usage, setUsage] = useState<CouncilCallUsage[]>([])
   const [results, setResults] = useState<Record<ProviderId, ResultState>>(EMPTY_RESULTS)
@@ -74,10 +74,6 @@ export default function TaskParallel({ settings }: { settings: SettingsState }):
     })
     return off
   }, [gate])
-
-  const toggle = (p: ProviderId): void => {
-    setSelected((s) => (s.includes(p) ? s.filter((x) => x !== p) : [...s, p]))
-  }
 
   const run = async (): Promise<void> => {
     if (!prompt.trim() || selected.length === 0) return

@@ -107,9 +107,9 @@ app.whenReady().then(() => {
   }
 
   registerIpcHandlers(() => mainWindow, secretStore, modelConfig, executors, backendConfig, workspaceConfig, languageConfig, onboardingConfig)
-  registerCodingIpcHandlers(() => mainWindow, executors)
+  registerCodingIpcHandlers(() => mainWindow, executors, workspaceConfig)
   registerProjectsIpcHandlers()
-  registerArtifactsIpcHandlers(() => mainWindow)
+  registerArtifactsIpcHandlers(() => mainWindow, workspaceConfig)
   registerCompanyTruthIpcHandlers()
   registerProjectSpecIpcHandlers(() => mainWindow, secretStore, modelConfig, executors, backendConfig)
   registerTaskGraphIpcHandlers(() => mainWindow, secretStore, modelConfig, executors, backendConfig)

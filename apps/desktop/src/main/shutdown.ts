@@ -5,6 +5,7 @@ import { flushProjectEvents } from './project-event-log'
 import { closeExecutionStores } from './execution-store'
 import { closeUsageStore } from './usage-store'
 import { stopRemainingProcesses } from '@ai-council/coding'
+import { isInstallingUpdate } from './auto-updater'
 
 export function installShutdown(getWindow: () => BrowserWindow | null, engine: { shutdown(): Promise<void> }): void {
   let finished = false
@@ -20,7 +21,7 @@ export function installShutdown(getWindow: () => BrowserWindow | null, engine: {
     closeUsageStore()
   }
   app.on('before-quit', event => {
-    if (finished) return
+    if (finished || isInstallingUpdate()) return
     event.preventDefault()
     if (pending) return
     const win = getWindow()
@@ -49,7 +50,7 @@ export function installShutdown(getWindow: () => BrowserWindow | null, engine: {
   // Electron creates from here on.
   const attachCloseGuard = (win: BrowserWindow): void => {
     win.on('close', event => {
-      if (!finished) { event.preventDefault(); app.quit() }
+      if (!finished && !isInstallingUpdate()) { event.preventDefault(); app.quit() }
     })
   }
   const initialWindow = getWindow()

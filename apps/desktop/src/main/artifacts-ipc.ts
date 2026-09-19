@@ -1,9 +1,11 @@
-import { ipcMain, BrowserWindow, dialog } from 'electron'
+import { app, ipcMain, BrowserWindow, dialog } from 'electron'
 import { readFile } from 'node:fs/promises'
 import { basename } from 'node:path'
 import { captureGitDiff, isGitRepo } from '@ai-council/coding'
 import type { AttachedArtifact, CaptureDiffResult } from './ipc-types'
-import { MAX_FILE_BYTES, MAX_INLINE_CHARS, classifyFile } from './attachment-files'
+import { MAX_FILE_BYTES, MAX_INLINE_CHARS, classifyFile, rememberAllowedAttachmentPath } from './attachment-files'
+import { firstExistingDir, parentDir } from './dialog-paths'
+import type { WorkspaceConfig } from './workspace-config'
 
 /**
  * Lets Vergleichen/Team/Council attach real evidence (a git diff, a local
@@ -20,7 +22,11 @@ function truncate(text: string, label: string): string {
   return text.slice(0, MAX_INLINE_CHARS) + '\n\n[... gekuerzt, ' + label + ' war laenger als ' + MAX_INLINE_CHARS + ' Zeichen ...]'
 }
 
-export function registerArtifactsIpcHandlers(getWindow: () => BrowserWindow | null): void {
+export function registerArtifactsIpcHandlers(
+  getWindow: () => BrowserWindow | null,
+  workspaceConfig: WorkspaceConfig
+): void {
+  let lastPickedDirectory: string | undefined
   ipcMain.handle('artifacts:captureDiff', async (_e, workingDirectory: string): Promise<CaptureDiffResult> => {
     if (!workingDirectory.trim()) return { ok: false, error: 'Kein Verzeichnis angegeben.' }
     if (!(await isGitRepo(workingDirectory))) {
@@ -52,6 +58,7 @@ export function registerArtifactsIpcHandlers(getWindow: () => BrowserWindow | nu
     if (!win) return { ok: false, error: 'Kein Fenster verfuegbar.' }
     const result = await dialog.showOpenDialog(win, {
       properties: ['openFile'],
+      defaultPath: firstExistingDir(lastPickedDirectory, workspaceConfig.getWorkspaceRoot(), app.getPath('documents')),
       filters: [
         { name: 'Text, Bilder, PDF', extensions: ['txt', 'md', 'csv', 'json', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'pdf'] },
         { name: 'Alle Dateien', extensions: ['*'] }
@@ -60,6 +67,8 @@ export function registerArtifactsIpcHandlers(getWindow: () => BrowserWindow | nu
     if (result.canceled || result.filePaths.length === 0) return { ok: false }
 
     const path = result.filePaths[0]
+    lastPickedDirectory = parentDir(path)
+    rememberAllowedAttachmentPath(path)
     let bytes: Buffer
     try {
       bytes = await readFile(path)

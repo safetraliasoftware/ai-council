@@ -156,7 +156,7 @@ export async function testXaiKey(apiKey: string, model: string): Promise<void> {
   const client = new OpenAI({ apiKey, baseURL: XAI_BASE_URL })
   await client.chat.completions.create({
     model,
-    max_tokens: 16,
+    max_tokens: 256,
     messages: [{ role: 'user', content: 'Antworte nur mit "ok".' }]
   })
 }

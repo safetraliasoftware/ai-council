@@ -6,8 +6,7 @@ import {
   toAnthropicUserContent,
   toGeminiParts,
   toOpenAIUserContent,
-  toXaiResponseInput,
-  UnsupportedInputFileError
+  toXaiResponseInput
 } from '../input-files'
 
 const PNG_1X1 = Buffer.from(
@@ -72,18 +71,21 @@ describe('input-file mappers', () => {
     expect(parts.at(-1)).toEqual({ text: 'Was siehst du?' })
   })
 
-  it('maps xAI Responses input_image and rejects PDF and GIF', async () => {
+  it('maps xAI Responses input_image and skips PDF and GIF with a note instead of failing the run', async () => {
     const parts = await toXaiResponseInput('Was siehst du?', [
       { filename: 'shot.png', mimeType: 'image/png', path: png }
     ])
     expect(parts[0]).toEqual({ type: 'input_text', text: 'Was siehst du?' })
     expect(parts[1]).toMatchObject({ type: 'input_image', detail: 'high' })
 
-    await expect(
-      toXaiResponseInput('x', [{ filename: 'spec.pdf', mimeType: 'application/pdf', path: pdf }])
-    ).rejects.toBeInstanceOf(UnsupportedInputFileError)
-    await expect(
-      toXaiResponseInput('x', [{ filename: 'anim.gif', mimeType: 'image/gif', path: gif }])
-    ).rejects.toBeInstanceOf(UnsupportedInputFileError)
+    const skipped = await toXaiResponseInput('x', [
+      { filename: 'spec.pdf', mimeType: 'application/pdf', path: pdf },
+      { filename: 'anim.gif', mimeType: 'image/gif', path: gif }
+    ])
+    expect(skipped).toHaveLength(1)
+    expect(skipped[0]).toMatchObject({ type: 'input_text' })
+    expect((skipped[0] as { text: string }).text).toContain('spec.pdf')
+    expect((skipped[0] as { text: string }).text).toContain('anim.gif')
+    expect((skipped[0] as { text: string }).text).toContain('JPEG/PNG')
   })
 })

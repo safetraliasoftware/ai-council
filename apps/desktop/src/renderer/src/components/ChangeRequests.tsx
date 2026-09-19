@@ -4,8 +4,7 @@ import type { ProviderId } from '@ai-council/shared'
 import { PROVIDER_LABELS } from '@ai-council/shared'
 import type { ChangeRequest, ChangeRequestSeverity } from '@ai-council/project-domain'
 import type { ChangeRequestEvaluatedEnvelope } from '../../../main/ipc-types'
-
-const ALL_PROVIDERS: ProviderId[] = ['anthropic', 'openai', 'gemini', 'xai']
+import { ALL_PROVIDERS, useReadyProviderSelection } from '../provider-ready'
 const SEVERITIES: ChangeRequestSeverity[] = ['minor', 'architecture', 'security', 'compliance']
 const SEVERITY_KEYS: Record<ChangeRequestSeverity, string> = {
   minor: 'changeRequests.severityMinor',
@@ -49,7 +48,7 @@ export default function ChangeRequests({ projectId, taskId, onChanged, onRequest
   const [requests, setRequests] = useState<ChangeRequest[]>([])
   const [drafts, setDrafts] = useState<Record<string, { proposedChanges: string; severity: ChangeRequestSeverity }>>({})
   const [linkVersion, setLinkVersion] = useState<Record<string, string>>({})
-  const [selected, setSelected] = useState<ProviderId[]>(ALL_PROVIDERS)
+  const [selected, toggle] = useReadyProviderSelection()
   const [chairId, setChairId] = useState<ProviderId>('anthropic')
   const [evaluating, setEvaluating] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
@@ -142,7 +141,7 @@ export default function ChangeRequests({ projectId, taskId, onChanged, onRequest
               type="checkbox"
               disabled={evaluating !== null}
               checked={selected.includes(p)}
-              onChange={() => setSelected((s) => (s.includes(p) ? s.filter((x) => x !== p) : [...s, p]))}
+              onChange={() => toggle(p)}
               style={{ width: 'auto' }}
             />
             {PROVIDER_LABELS[p]}

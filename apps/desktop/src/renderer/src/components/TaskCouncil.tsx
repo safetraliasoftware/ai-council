@@ -9,8 +9,7 @@ import type { AttachedArtifact, SettingsState } from '../../../main/ipc-types'
 import AttachmentPicker from '../AttachmentPicker'
 import CompanyTruthToggle from '../CompanyTruthToggle'
 import { createRunEventGate } from '../runEventGate'
-
-const ALL_PROVIDERS: ProviderId[] = ['anthropic', 'openai', 'gemini', 'xai']
+import { ALL_PROVIDERS, useReadyProviderSelection } from '../provider-ready'
 const STAGE_TITLE_KEYS: Record<CouncilStage, string> = {
   independent: 'taskCouncil.stageIndependent',
   critique: 'taskCouncil.stageCritique',
@@ -32,7 +31,7 @@ export default function TaskCouncil({ settings }: { settings: SettingsState }): 
   const { t } = useTranslation()
   const [prompt, setPrompt] = useState('')
   const [attachments, setAttachments] = useState<AttachedArtifact[]>([])
-  const [selected, setSelected] = useState<ProviderId[]>(ALL_PROVIDERS)
+  const [selected, toggle] = useReadyProviderSelection(settings)
   const [chairId, setChairId] = useState<ProviderId>('anthropic')
   // Normally a council needs >=2 to have anything to critique - but when
   // only one local agent is installed, this lets a Smoke-Test run go
@@ -95,10 +94,6 @@ export default function TaskCouncil({ settings }: { settings: SettingsState }): 
     })
     return off
   }, [gate])
-
-  const toggle = (p: ProviderId): void => {
-    setSelected((s) => (s.includes(p) ? s.filter((x) => x !== p) : [...s, p]))
-  }
 
   const canRun = prompt.trim() && selected.length >= minimumParticipants && selected.includes(chairId)
 
