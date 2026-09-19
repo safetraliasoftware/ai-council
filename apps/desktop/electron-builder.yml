@@ -1,6 +1,6 @@
 appId: com.aicouncil.desktop
 productName: AI Council
-electronVersion: 38.8.6
+electronVersion: 44.4.3
 publish:
   provider: github
   owner: safetraliasoftware
@@ -18,9 +18,14 @@ files:
 asarUnpack:
   - '**/node_modules/better-sqlite3/**'
 win:
+  # Electron 44 dropped 32-bit Windows binaries.
   target:
-    - nsis
-    - portable
+    - target: nsis
+      arch:
+        - x64
+    - target: portable
+      arch:
+        - x64
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true

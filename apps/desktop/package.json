@@ -1,6 +1,6 @@
 {
   "name": "@ai-council/desktop",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Desktop-App zum gemeinsamen Beauftragen von Claude, ChatGPT, Gemini und Grok",
   "main": "./out/main/index.js",
   "author": "Andre",
@@ -35,7 +35,7 @@
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.0.0",
-    "electron": "^38.0.0",
+    "electron": "^44.4.3",
     "electron-builder": "^26.0.0",
     "electron-vite": "^4.0.0",
     "typescript": "^5.9.0",
