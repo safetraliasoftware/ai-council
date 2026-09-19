@@ -46,6 +46,7 @@ function allExecutors(overrides: Partial<Record<CodingExecutorId, CodingExecutor
     'claude-code-cli': fakeExecutor({ installed: true, authStatus: 'authenticated' }),
     'openai-codex-cli': fakeExecutor({ installed: true, authStatus: 'unknown' }),
     'google-antigravity-cli': fakeExecutor({ installed: true, authStatus: 'unknown' }),
+    'grok-build-cli': fakeExecutor({ installed: true, authStatus: 'unknown' }),
     ...overrides
   }
 }
@@ -201,5 +202,22 @@ describe('createParticipantFactory', () => {
     await buildParticipant('anthropic')
     await buildParticipant('anthropic')
     expect(executors['claude-code-cli'].detect).toHaveBeenCalledTimes(1)
+  })
+
+  it('prepareAvailable includes Grok when ready and skips a missing seat instead of failing the whole council', async () => {
+    const secretStore = ElectronSecretStore.loadFromDisk(configPath)
+    const modelConfig = ModelConfig.loadFromDisk(configPath)
+    const backendConfig = BackendConfig.loadFromDisk(configPath)
+    for (const id of ['anthropic', 'openai', 'gemini', 'xai'] as const) backendConfig.setBackend(id, 'local')
+    const executors = allExecutors({
+      'google-antigravity-cli': fakeExecutor({ installed: false, authStatus: 'unknown' })
+    })
+    const buildParticipant = createParticipantFactory(secretStore, modelConfig, executors, backendConfig)
+    const participants = await buildParticipant.prepareAvailable()
+    const ids = participants.map((p) => p.id)
+    expect(ids).toContain('anthropic')
+    expect(ids).toContain('openai')
+    expect(ids).toContain('xai')
+    expect(ids).not.toContain('gemini')
   })
 })

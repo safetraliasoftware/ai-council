@@ -386,7 +386,7 @@ function projectTaskStatuses(state: ProjectExecution, graph: TaskGraphSnapshot):
     const attempt = [...state.attempts].reverse().find(a => a.taskId === task.id)
     if (!attempt) continue
     task.status = attempt.status === 'accepted' ? 'accepted'
-      : attempt.status === 'running' || attempt.status === 'awaiting_permission' || attempt.status === 'awaiting_install' ? 'in_progress'
+      : attempt.status === 'running' || attempt.status === 'awaiting_permission' || attempt.status === 'awaiting_install' || attempt.status === 'paused' ? 'in_progress'
       : attempt.status === 'review' ? 'review' : attempt.status === 'escalated' ? 'escalated' : 'failed'
   }
   return projection

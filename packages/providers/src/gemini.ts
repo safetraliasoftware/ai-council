@@ -8,6 +8,7 @@ import type {
   ProviderCapabilities,
   ProviderEvent
 } from '@ai-council/shared'
+import { requestText, toGeminiParts, UnsupportedInputFileError } from './input-files'
 
 export interface GeminiProviderConfig {
   apiKey: string
@@ -47,7 +48,7 @@ export class GeminiProvider implements AIProvider {
   }
 
   capabilities(): ProviderCapabilities {
-    return { streaming: true, tools: false, vision: false }
+    return { streaming: true, tools: false, vision: true }
   }
 
   async *generate(request: CouncilRequest, options?: GenerateOptions): AsyncIterable<ProviderEvent> {
@@ -55,12 +56,15 @@ export class GeminiProvider implements AIProvider {
     yield { type: 'start', runId }
 
     try {
+      const files = request.inputFiles ?? []
+      const text = requestText(request.messages)
+      const contents = files.length > 0 ? await toGeminiParts(text, files) : text
       // NOTE (known open point): the @google/genai SDK's per-call AbortSignal
       // wiring isn't confirmed against docs yet, so true request cancellation
       // isn't implemented for Gemini - stream consumption stops locally below.
       const stream = await this.client.models.generateContentStream({
         model: this.config.model,
-        contents: request.messages.map((m) => m.content).join('\n\n'),
+        contents,
         ...(request.systemInstructions
           ? { config: { systemInstruction: request.systemInstructions } }
           : {})
@@ -89,6 +93,10 @@ export class GeminiProvider implements AIProvider {
 
       yield { type: 'done', result: { text: fullText } }
     } catch (err) {
+      if (err instanceof UnsupportedInputFileError) {
+        yield { type: 'error', error: { providerId: 'gemini', code: 'invalid_request', message: err.message, retryable: false } }
+        return
+      }
       yield { type: 'error', error: mapError(err) }
     }
   }

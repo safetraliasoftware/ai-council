@@ -3,12 +3,13 @@
  * only on these types. Neither side depends on the other.
  */
 
-export type ProviderId = 'anthropic' | 'openai' | 'gemini'
+export type ProviderId = 'anthropic' | 'openai' | 'gemini' | 'xai'
 
 export const PROVIDER_LABELS: Record<ProviderId, string> = {
   anthropic: 'Claude',
   openai: 'ChatGPT',
-  gemini: 'Gemini'
+  gemini: 'Gemini',
+  xai: 'Grok'
 }
 
 export interface Usage {
@@ -38,9 +39,23 @@ export interface CouncilMessage {
   content: string
 }
 
+/**
+ * A file the host attached to this request. Orchestrators must copy this
+ * array onto every derived request that still refers to the original task
+ * (council critique/revision/synthesis, later team steps). Providers read
+ * the bytes from `path` themselves — this is a pointer, not a payload.
+ */
+export interface InputFile {
+  filename: string
+  mimeType: string
+  /** Absolute filesystem path. */
+  path: string
+}
+
 export interface CouncilRequest {
   systemInstructions?: string
   messages: CouncilMessage[]
+  inputFiles?: InputFile[]
 }
 
 export interface ToolCall {
@@ -79,6 +94,7 @@ export type ProviderEvent =
 export interface ProviderCapabilities {
   streaming: boolean
   tools: boolean
+  /** True when generate() maps CouncilRequest.inputFiles into native image/PDF parts. */
   vision: boolean
 }
 

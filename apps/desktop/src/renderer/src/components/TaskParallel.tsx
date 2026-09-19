@@ -8,8 +8,9 @@ import type { CouncilRunEvent } from '@ai-council/council-core'
 import type { AttachedArtifact, SettingsState } from '../../../main/ipc-types'
 import AttachmentPicker from '../AttachmentPicker'
 import CompanyTruthToggle from '../CompanyTruthToggle'
+import { createRunEventGate } from '../runEventGate'
 
-const ALL_PROVIDERS: ProviderId[] = ['anthropic', 'openai', 'gemini']
+const ALL_PROVIDERS: ProviderId[] = ['anthropic', 'openai', 'gemini', 'xai']
 
 interface ResultState {
   text: string
@@ -22,7 +23,8 @@ interface ResultState {
 const EMPTY_RESULTS: Record<ProviderId, ResultState> = {
   anthropic: { text: '', done: false },
   openai: { text: '', done: false },
-  gemini: { text: '', done: false }
+  gemini: { text: '', done: false },
+  xai: { text: '', done: false }
 }
 
 export default function TaskParallel({ settings }: { settings: SettingsState }): React.JSX.Element {
@@ -34,15 +36,16 @@ export default function TaskParallel({ settings }: { settings: SettingsState }):
   const [usage, setUsage] = useState<CouncilCallUsage[]>([])
   const [results, setResults] = useState<Record<ProviderId, ResultState>>(EMPTY_RESULTS)
   const [startError, setStartError] = useState('')
-  const currentRunId = useRef<string>('')
+  const gate = useRef(createRunEventGate()).current
+  const applyEvent = useRef<(e: CouncilRunEvent) => void>(() => {})
 
   useEffect(() => {
-    const off = window.api.task.onEvent((e: CouncilRunEvent) => {
+    const apply = (e: CouncilRunEvent): void => {
       if (e.kind === 'run_done') {
-        if (e.runId === currentRunId.current) { setRunning(false); setUsage(e.usage ?? []) }
+        setRunning(false)
+        setUsage(e.usage ?? [])
         return
       }
-      if (e.runId !== currentRunId.current) return
       const { providerId, event } = e
       setResults((r) => {
         const current = r[providerId]
@@ -63,9 +66,14 @@ export default function TaskParallel({ settings }: { settings: SettingsState }):
             return r
         }
       })
+    }
+    applyEvent.current = apply
+    const off = window.api.task.onEvent((raw: CouncilRunEvent) => {
+      const e = gate.take(raw)
+      if (e) apply(e)
     })
     return off
-  }, [])
+  }, [gate])
 
   const toggle = (p: ProviderId): void => {
     setSelected((s) => (s.includes(p) ? s.filter((x) => x !== p) : [...s, p]))
@@ -79,23 +87,26 @@ export default function TaskParallel({ settings }: { settings: SettingsState }):
     setResults({
       anthropic: { text: '', done: !selected.includes('anthropic') },
       openai: { text: '', done: !selected.includes('openai') },
-      gemini: { text: '', done: !selected.includes('gemini') }
+      gemini: { text: '', done: !selected.includes('gemini') },
+      xai: { text: '', done: !selected.includes('xai') }
     })
+    gate.begin()
     const { runId, error } = await window.api.task.runParallel({
       prompt,
       providers: selected,
       attachments
     })
     if (!runId) {
+      gate.fail()
       setRunning(false)
       setStartError(error ?? t('taskParallel.startFailed'))
       return
     }
-    currentRunId.current = runId
+    for (const e of gate.commit(runId)) applyEvent.current(e)
   }
 
   const cancel = async (): Promise<void> => {
-    if (currentRunId.current) await window.api.task.cancel(currentRunId.current)
+    if (gate.id) await window.api.task.cancel(gate.id)
     setRunning(false)
   }
 

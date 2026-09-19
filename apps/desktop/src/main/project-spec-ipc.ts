@@ -148,7 +148,7 @@ export function registerProjectSpecIpcHandlers(
   ipcMain.handle('projectSpec:approve', async (_e, projectId: string, version: number): Promise<void> => {
     const versions = replayProject(projectId)
     const candidate = versions.find(v => v.version === version)
-    if (!candidate || candidate.status !== 'council_generated') throw new Error('Keine freigabef?hige Spezifikation.')
+    if (!candidate || candidate.status !== 'council_generated') throw new Error('Keine freigabefähige Spezifikation.')
     await appendEvent(projectId, {
       projectId,
       type: 'SpecificationHumanApproved',

@@ -10,6 +10,7 @@
   --claude-color: #d97757;
   --openai-color: #10a37f;
   --gemini-color: #4285f4;
+  --xai-color: #71717a;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -171,6 +172,9 @@ button.link {
 }
 .dot-gemini {
   background: var(--gemini-color);
+}
+.dot-xai {
+  background: var(--xai-color);
 }
 
 .status-ok {

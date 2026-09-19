@@ -1,6 +1,11 @@
 import { RunUsageTracker } from '../run-usage'
 import { randomUUID } from 'node:crypto'
 import type { CouncilParticipant, CouncilParticipantEvent, CouncilRequest, GenerateOptions, ProviderId } from '@ai-council/shared'
+
+/** Copy original inputFiles onto a derived round so later stages still see the attachments. */
+function withInputFiles(original: CouncilRequest, derived: CouncilRequest): CouncilRequest {
+  return original.inputFiles?.length ? { ...derived, inputFiles: original.inputFiles } : derived
+}
 import type { CouncilRun, CouncilRunEvent, CouncilStage } from '../events'
 import { mergeAsyncIterables } from '../merge-async-iterables'
 import { assertUniqueParticipantIds } from '../assert-unique-ids'
@@ -103,7 +108,7 @@ export function runCouncil(args: RunCouncilArgs): CouncilRun {
         'Prüfe die Entwürfe auf konkrete Fehler und Widersprüche und konsolidiere sie. Wähle für reversible Implementierungsdetails vernünftige Standards und dokumentiere sie kurz. Frage nur nach fehlenden Entscheidungen, die Ziel, Kosten, Sicherheit oder verbindliche Anforderungen wesentlich verändern. Halte das ursprüngliche Ausgabeformat ein. Tatsächliche ungelöste Blocker dürfen nicht überstimmt werden.'
       ].join('\n\n')
       yield* runRound(runId, 'synthesis', [{ provider: chair, label: labels.get(chair.id)!,
-        request: { systemInstructions: request.systemInstructions, messages: [{ role: 'user', content: prompt }] } }], new Map(), options, usage)
+        request: withInputFiles(request, { systemInstructions: request.systemInstructions, messages: [{ role: 'user', content: prompt }] }) }], new Map(), options, usage)
       yield { kind: 'run_done', runId, usage: usage.calls }
       return
     }
@@ -119,7 +124,7 @@ export function runCouncil(args: RunCouncilArgs): CouncilRun {
         others.length ? buildAnonymizedBlock(others, 'Antwort') : `Es gibt nur einen Teilnehmer. Prüfe deshalb die Annahmen und Gegenpositionen deines eigenen Entwurfs:\n${independentResults.get(provider.id)}`,
         'Deine Aufgabe: Kritisiere diese Antworten kritisch und konstruktiv. Prüfe auf fachliche Fehler, unbelegte Annahmen, fehlende Belege und Risiken. Kennzeichne jede bewertete Aussage mit einem der Tags FACT, ASSUMPTION, OPINION, RISK oder UNKNOWN.'
       ].join('\n\n')
-      return { provider, label: labels.get(provider.id)!, request: { messages: [{ role: 'user', content: prompt }] } }
+      return { provider, label: labels.get(provider.id)!, request: withInputFiles(request, { messages: [{ role: 'user', content: prompt }] }) }
     })
     yield* runRound(runId, 'critique', critiqueParticipants, critiqueResults, options, usage)
 
@@ -127,12 +132,12 @@ export function runCouncil(args: RunCouncilArgs): CouncilRun {
     const revisions = new Map<ProviderId, string>()
     const eligible = answered.filter(p => critiqueResults.has(p.id))
     yield* runRound(runId, 'revision', eligible.map(provider => ({
-      provider, label: labels.get(provider.id)!, request: { systemInstructions: request.systemInstructions, messages: [{ role: 'user', content: [
+      provider, label: labels.get(provider.id)!, request: withInputFiles(request, { systemInstructions: request.systemInstructions, messages: [{ role: 'user', content: [
         `Ursprüngliche Aufgabe:\n${originalPrompt}`,
         `Dein Entwurf:\n${independentResults.get(provider.id)}`,
         buildAnonymizedBlock(eligible.map(p => ({ label: labels.get(p.id)!, text: critiqueResults.get(p.id)! })), 'Kritik'),
         'Überarbeite deinen Entwurf anhand der Kritik. Benenne verbleibende blockierende Einwände, Risiken und unbelegte Annahmen ausdrücklich.'
-      ].join('\n\n') }] }
+      ].join('\n\n') }] })
     })), revisions, options, usage)
     const revised = eligible.filter(p => revisions.has(p.id))
     if (!revised.length || options?.signal?.aborted) { yield { kind: 'run_done', runId, usage: usage.calls }; return }
@@ -154,7 +159,7 @@ export function runCouncil(args: RunCouncilArgs): CouncilRun {
     yield* runRound(
       runId,
       'synthesis',
-      [{ provider: chair, label: labels.get(chair.id)!, request: { messages: [{ role: 'user', content: synthesisPrompt }] } }],
+      [{ provider: chair, label: labels.get(chair.id)!, request: withInputFiles(request, { messages: [{ role: 'user', content: synthesisPrompt }] }) }],
       synthesisResults,
       options, usage
     )

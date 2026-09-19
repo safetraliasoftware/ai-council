@@ -7,7 +7,7 @@ import type { UiLanguage } from '../../../main/language-config'
 import type { ExecutorAvailability } from '@ai-council/coding'
 import CompanyTruth from './CompanyTruth'
 
-const PROVIDERS: ProviderId[] = ['anthropic', 'openai', 'gemini']
+const PROVIDERS: ProviderId[] = ['anthropic', 'openai', 'gemini', 'xai']
 const LANGUAGES: { id: UiLanguage; label: string }[] = [
   { id: 'de', label: 'Deutsch' },
   { id: 'en', label: 'English' },
@@ -15,24 +15,30 @@ const LANGUAGES: { id: UiLanguage; label: string }[] = [
   { id: 'es', label: 'Español' }
 ]
 
-export const LOCAL_AGENT_LABEL: Record<ProviderId, string> = {
+// Partial - kept that way even though all four providers currently have a
+// local CLI agent, since an absent entry means "API only" throughout this
+// file and a future fifth provider might not have one.
+export const LOCAL_AGENT_LABEL: Partial<Record<ProviderId, string>> = {
   anthropic: 'Claude Code',
   openai: 'Codex',
-  gemini: 'Antigravity'
+  gemini: 'Antigravity',
+  xai: 'Grok Build'
 }
-export const LOCAL_AGENT_ID: Record<ProviderId, CodingExecutorId> = {
+export const LOCAL_AGENT_ID: Partial<Record<ProviderId, CodingExecutorId>> = {
   anthropic: 'claude-code-cli',
   openai: 'openai-codex-cli',
-  gemini: 'google-antigravity-cli'
+  gemini: 'google-antigravity-cli',
+  xai: 'grok-build-cli'
 }
 // Binary names are verified against each executor's own DEFAULT_BINARY
 // constant (packages/coding/src/executors/*.ts); docs URLs verified live
 // via web search rather than guessed - install/auth steps change too often
 // to hardcode commands here, so this only links to the official source.
-export const LOCAL_AGENT_DOCS: Record<ProviderId, { binary: string; docsUrl: string }> = {
+export const LOCAL_AGENT_DOCS: Partial<Record<ProviderId, { binary: string; docsUrl: string }>> = {
   anthropic: { binary: 'claude', docsUrl: 'https://code.claude.com/docs/en/quickstart' },
   openai: { binary: 'codex', docsUrl: 'https://developers.openai.com/codex/cli' },
-  gemini: { binary: 'agy', docsUrl: 'https://antigravity.google/docs/cli/getting-started/' }
+  gemini: { binary: 'agy', docsUrl: 'https://antigravity.google/docs/cli/getting-started/' },
+  xai: { binary: 'grok', docsUrl: 'https://docs.x.ai/build/overview' }
 }
 
 export default function Settings({
@@ -46,11 +52,12 @@ export default function Settings({
   const [keyDrafts, setKeyDrafts] = useState<Record<ProviderId, string>>({
     anthropic: '',
     openai: '',
-    gemini: ''
+    gemini: '',
+    xai: ''
   })
   const [testStatus, setTestStatus] = useState<
     Record<ProviderId, { ok: boolean; error?: string; testing: boolean } | undefined>
-  >({ anthropic: undefined, openai: undefined, gemini: undefined })
+  >({ anthropic: undefined, openai: undefined, gemini: undefined, xai: undefined })
   const [detectAll, setDetectAll] = useState<Partial<Record<CodingExecutorId, ExecutorAvailability>>>({})
   const [allowPaidApiFallback, setAllowPaidApiFallback] = useState(false)
   const [workspaceRoot, setWorkspaceRoot] = useState<string | undefined>()
@@ -58,6 +65,7 @@ export default function Settings({
   const [workspaceBusy, setWorkspaceBusy] = useState(false)
   const [workspaceError, setWorkspaceError] = useState('')
   const [language, setLanguage] = useState<UiLanguage>('de')
+  const [localAgentBusy, setLocalAgentBusy] = useState<Partial<Record<ProviderId, { error?: string }>>>({})
 
   useEffect(() => {
     window.api.coding.detectAll().then(setDetectAll)
@@ -67,7 +75,29 @@ export default function Settings({
       setWorkspaceDraft(root ?? '')
     })
     window.api.settings.getLanguage().then(setLanguage)
+    // Re-detect when the window regains focus - covers the common case of
+    // installing/logging in via the terminal windows below, then alt-tabbing
+    // back here, without needing a dedicated manual refresh button.
+    const onFocus = (): void => {
+      window.api.coding.detectAll().then(setDetectAll)
+    }
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
   }, [])
+
+  // Only ever invoked from the local-agents section below, which already
+  // filters to providers that have a LOCAL_AGENT_ID entry.
+  const installLocalAgent = async (provider: ProviderId): Promise<void> => {
+    setLocalAgentBusy((prev) => ({ ...prev, [provider]: {} }))
+    const result = await window.api.coding.installExecutor(LOCAL_AGENT_ID[provider]!)
+    setLocalAgentBusy((prev) => ({ ...prev, [provider]: { error: result.ok ? undefined : result.error } }))
+  }
+
+  const loginLocalAgent = async (provider: ProviderId): Promise<void> => {
+    setLocalAgentBusy((prev) => ({ ...prev, [provider]: {} }))
+    const result = await window.api.coding.loginExecutor(LOCAL_AGENT_ID[provider]!)
+    setLocalAgentBusy((prev) => ({ ...prev, [provider]: { error: result.ok ? undefined : result.error } }))
+  }
 
   const pickWorkspaceDirectory = async (): Promise<void> => {
     const dir = await window.api.coding.pickDirectory()
@@ -184,17 +214,21 @@ export default function Settings({
               />
             </div>
             <div className="field" style={{ margin: 0 }}>
-              <select
-                value={cfg.backend}
-                onChange={(e) => changeBackend(provider, e.target.value as ParticipantBackendChoice)}
-              >
-                <option value="api">{t('settings.backendApi')}</option>
-                <option value="local">{t('settings.backendLocal', { agent: LOCAL_AGENT_LABEL[provider] })}</option>
-                <option value="auto">{t('settings.backendAuto')}</option>
-              </select>
-              {cfg.backend !== 'api' &&
+              {LOCAL_AGENT_LABEL[provider] ? (
+                <select
+                  value={cfg.backend}
+                  onChange={(e) => changeBackend(provider, e.target.value as ParticipantBackendChoice)}
+                >
+                  <option value="api">{t('settings.backendApi')}</option>
+                  <option value="local">{t('settings.backendLocal', { agent: LOCAL_AGENT_LABEL[provider] })}</option>
+                  <option value="auto">{t('settings.backendAuto')}</option>
+                </select>
+              ) : (
+                <span className="status-neutral">{t('settings.backendApi')}</span>
+              )}
+              {cfg.backend !== 'api' && LOCAL_AGENT_ID[provider] &&
                 (() => {
-                  const status = detectAll[LOCAL_AGENT_ID[provider]]
+                  const status = detectAll[LOCAL_AGENT_ID[provider]!]
                   if (!status) return null
                   return (
                     <div className={status.installed ? 'status-ok' : 'status-bad'} style={{ fontSize: 12 }}>
@@ -222,21 +256,39 @@ export default function Settings({
       <p style={{ color: 'var(--text-muted)' }}>
         {t('settings.localAgentsIntro')}
       </p>
-      {PROVIDERS.map((provider) => {
-        const info = LOCAL_AGENT_DOCS[provider]
-        const status = detectAll[LOCAL_AGENT_ID[provider]]
+      {PROVIDERS.filter((provider) => LOCAL_AGENT_ID[provider]).map((provider) => {
+        const info = LOCAL_AGENT_DOCS[provider]!
+        const status = detectAll[LOCAL_AGENT_ID[provider]!]
+        const busy = localAgentBusy[provider]
         return (
-          <div key={provider} className="row" style={{ justifyContent: 'space-between', marginBottom: 6 }}>
-            <div>
-              <span className={`provider-dot dot-${provider}`} />
-              {LOCAL_AGENT_LABEL[provider]} <span className="status-neutral">({info.binary})</span>
+          <div key={provider} style={{ marginBottom: 6 }}>
+            <div className="row" style={{ justifyContent: 'space-between' }}>
+              <div>
+                <span className={`provider-dot dot-${provider}`} />
+                {LOCAL_AGENT_LABEL[provider]} <span className="status-neutral">({info.binary})</span>
+              </div>
+              {status?.installed !== true && (
+                <button className="secondary" onClick={() => installLocalAgent(provider)}>
+                  {t('settings.installButton')}
+                </button>
+              )}
+              {status?.installed === true && (
+                <button className="secondary" onClick={() => loginLocalAgent(provider)}>
+                  {t('settings.loginButton')}
+                </button>
+              )}
+              <a href={info.docsUrl} target="_blank" rel="noreferrer">
+                {t('settings.officialGuide')}
+              </a>
+              <span className={status?.installed ? 'status-ok' : 'status-bad'}>
+                {status ? (status.installed ? t('settings.installedAuth', { status: status.authStatus }) : t('settings.notFound')) : t('settings.checking')}
+              </span>
             </div>
-            <a href={info.docsUrl} target="_blank" rel="noreferrer">
-              {t('settings.officialGuide')}
-            </a>
-            <span className={status?.installed ? 'status-ok' : 'status-bad'}>
-              {status ? (status.installed ? t('settings.installedAuth', { status: status.authStatus }) : t('settings.notFound')) : t('settings.checking')}
-            </span>
+            {busy && (
+              <p className={busy.error ? 'error-text' : 'status-neutral'} style={{ margin: '4px 0 0', fontSize: 12 }}>
+                {busy.error ? t('settings.installLoginFailed', { error: busy.error }) : t('settings.installLoginHint')}
+              </p>
+            )}
           </div>
         )
       })}

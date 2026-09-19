@@ -8,5 +8,6 @@ import type { ProviderId } from './contracts'
 export const DEFAULT_MODELS: Record<ProviderId, string> = {
   anthropic: 'claude-opus-5',
   openai: 'gpt-5.1',
-  gemini: 'gemini-3-pro-preview'
+  gemini: 'gemini-3-pro-preview',
+  xai: 'grok-4.6'
 }

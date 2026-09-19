@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ProviderId } from '@ai-council/shared'
 import { PROVIDER_LABELS } from '@ai-council/shared'
-import type { CouncilStage } from '@ai-council/council-core'
+import type { CouncilRunEvent, CouncilStage } from '@ai-council/council-core'
 import type { ProjectSpecification, TaskGraphSnapshot } from '@ai-council/project-domain'
 import type {
   GenerateSpecRequestDto,
@@ -13,8 +13,9 @@ import type {
   TaskGraphGeneratedEnvelope
 } from '../../../main/ipc-types'
 import TaskGraphExecution from './TaskGraphExecution'
+import { createRunEventGate } from '../runEventGate'
 
-const ALL_PROVIDERS: ProviderId[] = ['anthropic', 'openai', 'gemini']
+const ALL_PROVIDERS: ProviderId[] = ['anthropic', 'openai', 'gemini', 'xai']
 const STAGE_TITLE_KEYS: Record<CouncilStage, string> = {
   independent: 'projectSpec.stageIndependent',
   critique: 'projectSpec.stageCritique',
@@ -90,7 +91,10 @@ export default function ProjectSpec({ prefill }: { prefill: ProjectSpecPrefill |
   const [specUsage, setSpecUsage] = useState<CouncilCallUsage[]>([])
   const [graphUsage, setGraphUsage] = useState<CouncilCallUsage[]>([])
   const [result, setResult] = useState<ProjectSpecGeneratedEnvelope | null>(null)
-  const currentRunId = useRef<string>('')
+  const specGate = useRef(createRunEventGate()).current
+  const specActive = useRef(false)
+  const graphGate = useRef(createRunEventGate()).current
+  const graphActive = useRef(false)
   // The live "Runde 1..4" progress renders near the top of the page, above
   // the current specification - but the button that starts a new version
   // (answer open questions, then "Antworten senden & neue Version
@@ -104,7 +108,8 @@ export default function ProjectSpec({ prefill }: { prefill: ProjectSpecPrefill |
   const [taskGraphRunning, setTaskGraphRunning] = useState(false)
   const [taskGraphStages, setTaskGraphStages] = useState(EMPTY_STAGES)
   const [taskGraphResult, setTaskGraphResult] = useState<TaskGraphGeneratedEnvelope | null>(null)
-  const taskGraphRunId = useRef<string>('')
+  const applySpecEvent = useRef<(e: CouncilRunEvent) => void>(() => {})
+  const applyGraphEvent = useRef<(e: CouncilRunEvent) => void>(() => {})
 
   const reloadProjects = async (): Promise<void> => {
     setProjects(await window.api.projectSpec.list())
@@ -168,8 +173,7 @@ export default function ProjectSpec({ prefill }: { prefill: ProjectSpecPrefill |
   }, [prefill])
 
   useEffect(() => {
-    const offCouncil = window.api.projectSpec.onCouncilEvent((e) => {
-      if (e.runId !== currentRunId.current) return
+    const apply = (e: CouncilRunEvent): void => {
       if (e.kind === 'run_done') { setSpecUsage(e.usage ?? []); return }
       if (!e.stage) return
       const stage = e.stage
@@ -199,8 +203,15 @@ export default function ProjectSpec({ prefill }: { prefill: ProjectSpecPrefill |
         }
         return { ...s, [stage]: { ...stageState, [providerId]: next } }
       })
+    }
+    applySpecEvent.current = apply
+    const offCouncil = window.api.projectSpec.onCouncilEvent((raw) => {
+      const e = specGate.take(raw)
+      if (e) apply(e)
     })
     const offGenerated = window.api.projectSpec.onGenerated((envelope) => {
+      if (!specActive.current) return
+      specActive.current = false
       setRunning(false)
       setResult(envelope)
       setSelectedProjectId(envelope.projectId)
@@ -213,11 +224,10 @@ export default function ProjectSpec({ prefill }: { prefill: ProjectSpecPrefill |
       offCouncil()
       offGenerated()
     }
-  }, [])
+  }, [specGate])
 
   useEffect(() => {
-    const offCouncil = window.api.taskGraph.onCouncilEvent((e) => {
-      if (e.runId !== taskGraphRunId.current) return
+    const apply = (e: CouncilRunEvent): void => {
       if (e.kind === 'run_done') { setGraphUsage(e.usage ?? []); return }
       if (!e.stage) return
       const stage = e.stage
@@ -247,8 +257,15 @@ export default function ProjectSpec({ prefill }: { prefill: ProjectSpecPrefill |
         }
         return { ...s, [stage]: { ...stageState, [providerId]: next } }
       })
+    }
+    applyGraphEvent.current = apply
+    const offCouncil = window.api.taskGraph.onCouncilEvent((raw) => {
+      const e = graphGate.take(raw)
+      if (e) apply(e)
     })
     const offGenerated = window.api.taskGraph.onGenerated((envelope) => {
+      if (!graphActive.current) return
+      graphActive.current = false
       setTaskGraphRunning(false)
       setTaskGraphResult(envelope)
       if (envelope.ok) setTaskGraph(envelope.snapshot)
@@ -257,7 +274,7 @@ export default function ProjectSpec({ prefill }: { prefill: ProjectSpecPrefill |
       offCouncil()
       offGenerated()
     }
-  }, [])
+  }, [graphGate])
 
   const toggle = (p: ProviderId): void => {
     setSelected((s) => (s.includes(p) ? s.filter((x) => x !== p) : [...s, p]))
@@ -266,6 +283,14 @@ export default function ProjectSpec({ prefill }: { prefill: ProjectSpecPrefill |
   const canRun = goal.trim() && selected.length >= 2 && selected.includes(chairId)
 
   const startNewProject = (): void => {
+    specActive.current = false
+    graphActive.current = false
+    if (specGate.id) void window.api.projectSpec.cancel(specGate.id)
+    if (graphGate.id) void window.api.taskGraph.cancel(graphGate.id)
+    specGate.fail()
+    graphGate.fail()
+    setRunning(false)
+    setTaskGraphRunning(false)
     setSelectedProjectId(null)
     setHistory([])
     setGoal('')
@@ -285,6 +310,14 @@ export default function ProjectSpec({ prefill }: { prefill: ProjectSpecPrefill |
   }
 
   const openProject = async (projectId: string): Promise<void> => {
+    specActive.current = false
+    graphActive.current = false
+    if (specGate.id) void window.api.projectSpec.cancel(specGate.id)
+    if (graphGate.id) void window.api.taskGraph.cancel(graphGate.id)
+    specGate.fail()
+    graphGate.fail()
+    setRunning(false)
+    setTaskGraphRunning(false)
     setSelectedProjectId(projectId)
     setResult(null)
     setUserNote('')
@@ -348,18 +381,24 @@ export default function ProjectSpec({ prefill }: { prefill: ProjectSpecPrefill |
       chairId,
       userNote: selectedProjectId ? composeRevisionNote() : undefined
     }
+    specActive.current = true
+    specGate.begin()
     try {
       const { runId } = await window.api.projectSpec.generate(req)
       if (!runId) throw new Error(t('projectSpec.specRunStartFailed'))
-      currentRunId.current = runId
+      for (const e of specGate.commit(runId)) applySpecEvent.current(e)
     } catch (err) {
+      specActive.current = false
+      specGate.fail()
       setRunning(false)
       setResult({ projectId: selectedProjectId ?? '', ok: false, error: String(err), rawText: '' })
     }
   }
 
   const cancel = async (): Promise<void> => {
-    if (currentRunId.current) await window.api.projectSpec.cancel(currentRunId.current)
+    specActive.current = false
+    if (specGate.id) await window.api.projectSpec.cancel(specGate.id)
+    specGate.fail()
     setRunning(false)
   }
 
@@ -406,18 +445,24 @@ export default function ProjectSpec({ prefill }: { prefill: ProjectSpecPrefill |
       providers: selected,
       chairId
     }
+    graphActive.current = true
+    graphGate.begin()
     try {
       const { runId } = await window.api.taskGraph.generate(req)
       if (!runId) throw new Error(t('projectSpec.taskGraphStartFailed'))
-      taskGraphRunId.current = runId
+      for (const e of graphGate.commit(runId)) applyGraphEvent.current(e)
     } catch (err) {
+      graphActive.current = false
+      graphGate.fail()
       setTaskGraphRunning(false)
       setTaskGraphResult({ projectId: selectedProjectId, ok: false, error: String(err), rawText: '' })
     }
   }
 
   const cancelTaskGraph = async (): Promise<void> => {
-    if (taskGraphRunId.current) await window.api.taskGraph.cancel(taskGraphRunId.current)
+    graphActive.current = false
+    if (graphGate.id) await window.api.taskGraph.cancel(graphGate.id)
+    graphGate.fail()
     setTaskGraphRunning(false)
   }
 

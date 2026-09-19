@@ -7,7 +7,7 @@ import { CODING_EXECUTOR_LABELS, PERMISSION_TIER_LABELS } from '../../../main/ip
 import { applyCodingEvent, LogLine, type LogEntry } from '../codingEventDisplay'
 import ProjectPicker from '../ProjectPicker'
 
-const EXECUTORS: CodingExecutorId[] = ['claude-code-cli', 'openai-codex-cli', 'google-antigravity-cli']
+const EXECUTORS: CodingExecutorId[] = ['claude-code-cli', 'openai-codex-cli', 'google-antigravity-cli', 'grok-build-cli']
 const PERMISSION_TIERS: PermissionTier[] = ['read-only', 'read-write', 'full']
 
 export interface TaskCodingProps {
@@ -60,6 +60,9 @@ export default function TaskCoding({ onHandoffToWorkflow }: TaskCodingProps): Re
   const [historyList, setHistoryList] = useState<HistoryListEntry[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
   const currentTaskId = useRef<string>('')
+  const activeExecutorId = useRef<CodingExecutorId>(executorId)
+  const waitingForTaskId = useRef(false)
+  const pendingCodingEvents = useRef<{ taskId: string; event: Parameters<typeof applyCodingEvent>[1] }[]>([])
   // Kept stable across follow-ups (unlike `prompt`, which the input reuses)
   // so every history save for this session/session-continuation still shows
   // the task that started it.
@@ -76,7 +79,7 @@ export default function TaskCoding({ onHandoffToWorkflow }: TaskCodingProps): Re
   const saveToHistory = (finalLogs: LogEntry[], sid: string | undefined): void => {
     if (!historyPromptRef.current) return
     void window.api.history.saveCodingRun({
-      executorId,
+      executorId: activeExecutorId.current,
       workingDirectory,
       permissionTier,
       prompt: historyPromptRef.current,
@@ -87,25 +90,35 @@ export default function TaskCoding({ onHandoffToWorkflow }: TaskCodingProps): Re
     })
   }
 
+  const handleCodingEvent = (taskId: string, event: Parameters<typeof applyCodingEvent>[1]): void => {
+    if (taskId !== currentTaskId.current) return
+    const updatedLogs = applyCodingEvent(logsRef.current, event)
+    logsRef.current = updatedLogs
+    setLogs(updatedLogs)
+    if (event.type === 'error') {
+      setRunning(false)
+      saveToHistory(updatedLogs, undefined)
+    }
+    if (event.type === 'done') {
+      setRunning(false)
+      setSessionId(event.sessionId)
+      saveToHistory(updatedLogs, event.sessionId)
+    }
+  }
+  const handleCodingEventRef = useRef(handleCodingEvent)
+  handleCodingEventRef.current = handleCodingEvent
+
   useEffect(() => {
     const off = window.api.coding.onEvent(({ executorId: fromExecutor, taskId, event }) => {
-      if (fromExecutor !== executorId || taskId !== currentTaskId.current) return
-      const updatedLogs = applyCodingEvent(logsRef.current, event)
-      logsRef.current = updatedLogs
-      setLogs(updatedLogs)
-      if (event.type === 'error') {
-        setRunning(false)
-        saveToHistory(updatedLogs, undefined)
+      if (fromExecutor !== activeExecutorId.current) return
+      if (waitingForTaskId.current) {
+        pendingCodingEvents.current.push({ taskId, event })
+        return
       }
-      if (event.type === 'done') {
-        setRunning(false)
-        setSessionId(event.sessionId)
-        saveToHistory(updatedLogs, event.sessionId)
-      }
+      handleCodingEventRef.current(taskId, event)
     })
     return off
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [executorId, workingDirectory, permissionTier])
+  }, [])
 
   const runDetect = async (id: CodingExecutorId): Promise<void> => {
     const result = await window.api.coding.detect(id)
@@ -127,6 +140,9 @@ export default function TaskCoding({ onHandoffToWorkflow }: TaskCodingProps): Re
     setPlanPicker(null)
     historyPromptRef.current = prompt
     historyStartedAtRef.current = Date.now()
+    activeExecutorId.current = executorId
+    waitingForTaskId.current = true
+    pendingCodingEvents.current = []
     try {
       const { taskId, error } = await window.api.coding.startTask({
         executorId,
@@ -136,7 +152,12 @@ export default function TaskCoding({ onHandoffToWorkflow }: TaskCodingProps): Re
       })
       if (!taskId) throw new Error(error ?? t('taskCoding.startTaskFailed'))
       currentTaskId.current = taskId
+      waitingForTaskId.current = false
+      for (const pending of pendingCodingEvents.current) handleCodingEvent(pending.taskId, pending.event)
+      pendingCodingEvents.current = []
     } catch (err) {
+      waitingForTaskId.current = false
+      pendingCodingEvents.current = []
       // Without this, any rejection here left "Läuft…" stuck forever with
       // nothing visible - caught live.
       setRunning(false)
@@ -150,6 +171,9 @@ export default function TaskCoding({ onHandoffToWorkflow }: TaskCodingProps): Re
     setStartError('')
     logsRef.current = [...logsRef.current, { kind: 'status', message: t('taskCoding.youPrefix', { text: followUp }), count: 1 }]
     setLogs(logsRef.current)
+    activeExecutorId.current = executorId
+    waitingForTaskId.current = true
+    pendingCodingEvents.current = []
     try {
       const { taskId, error } = await window.api.coding.resumeSession({
         executorId,
@@ -160,15 +184,20 @@ export default function TaskCoding({ onHandoffToWorkflow }: TaskCodingProps): Re
       })
       if (!taskId) throw new Error(error ?? t('taskCoding.followUpFailed'))
       currentTaskId.current = taskId
+      waitingForTaskId.current = false
+      for (const pending of pendingCodingEvents.current) handleCodingEvent(pending.taskId, pending.event)
+      pendingCodingEvents.current = []
       setFollowUp('')
     } catch (err) {
+      waitingForTaskId.current = false
+      pendingCodingEvents.current = []
       setRunning(false)
       setStartError(err instanceof Error ? err.message : String(err))
     }
   }
 
   const abort = async (): Promise<void> => {
-    if (currentTaskId.current) await window.api.coding.abort(executorId, currentTaskId.current)
+    if (currentTaskId.current) await window.api.coding.abort(activeExecutorId.current, currentTaskId.current)
     setRunning(false)
   }
 
@@ -271,6 +300,7 @@ export default function TaskCoding({ onHandoffToWorkflow }: TaskCodingProps): Re
           <div className="row">
             <select
               value={executorId}
+              disabled={running}
               onChange={(e) => setExecutorId(e.target.value as CodingExecutorId)}
               style={{ width: 200 }}
             >
@@ -299,10 +329,11 @@ export default function TaskCoding({ onHandoffToWorkflow }: TaskCodingProps): Re
             <input
               type="text"
               value={workingDirectory}
+              disabled={running}
               onChange={(e) => setWorkingDirectory(e.target.value)}
               placeholder={t('taskCoding.pathPlaceholder')}
             />
-            <button className="secondary" onClick={pickDirectory}>
+            <button className="secondary" disabled={running} onClick={pickDirectory}>
               {t('taskCoding.browse')}
             </button>
           </div>
@@ -320,6 +351,7 @@ export default function TaskCoding({ onHandoffToWorkflow }: TaskCodingProps): Re
           <label>{t('taskCoding.permissionTierLabel')}</label>
           <select
             value={permissionTier}
+            disabled={running}
             onChange={(e) => setPermissionTier(e.target.value as PermissionTier)}
             style={{ width: 260 }}
           >

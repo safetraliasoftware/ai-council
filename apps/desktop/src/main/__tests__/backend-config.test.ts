@@ -22,6 +22,7 @@ describe('BackendConfig', () => {
     expect(config.getBackend('anthropic')).toBe('auto')
     expect(config.getBackend('openai')).toBe('auto')
     expect(config.getBackend('gemini')).toBe('auto')
+    expect(config.getBackend('xai')).toBe('auto')
     expect(config.getAllowPaidApiFallback()).toBe(false)
   })
 

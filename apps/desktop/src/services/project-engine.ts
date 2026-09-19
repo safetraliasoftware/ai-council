@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
+import type { ProviderId } from '@ai-council/shared'
 import { requireApprovedSpecification, requireVerifiedAttempt, requireReleaseReady, checkScope, canResumeTaskCorrection, canRecheckReviewWorkspace } from '@ai-council/project-domain'
 import type { ProjectExecution, TaskAttempt, CommandSpec, Verdict, ProjectSpecification, TaskGraphSnapshot, ChangeRequest } from '@ai-council/project-domain'
 import { createWorktree, ensureProjectRepository, discardWorktree, gitOutput,
@@ -29,7 +30,7 @@ export interface EngineeringPorts {
   context(projectId: string, taskId: string): string
   executor(id: string): CodingExecutor
   /** workingDirectory grounds local-agent council seats in a real directory instead of the empty app-owned scratch dir - see finalReview()/applyChangeRequest()'s call sites for what they pass. */
-  council(prompt: string, signal: AbortSignal, chairId?: 'anthropic' | 'openai' | 'gemini', workingDirectory?: string, projectId?: string, kind?: 'final_review' | 'replanning'): Promise<string>
+  council(prompt: string, signal: AbortSignal, chairId?: ProviderId, workingDirectory?: string, projectId?: string, kind?: 'final_review' | 'replanning'): Promise<string>
   emit(projectId: string, taskId: string, attemptId: string, event: WorkflowEvent): void
   record?(projectId: string, attemptId: string, event: WorkflowEvent): Promise<void>
 }
@@ -196,7 +197,7 @@ export class ProjectEngine {
       if (!newSpec || newSpec.status !== 'human_approved') throw new Error('Die verknüpfte Spezifikationsversion ist noch nicht genehmigt.')
 
       const state = this.state(id)
-      if (state.attempts.some(a => a.status === 'running' || a.status === 'awaiting_permission' || a.status === 'review')) throw new Error('Offene Versuche zuerst beenden oder verwerfen.')
+      if (state.attempts.some(a => a.status === 'running' || a.status === 'awaiting_permission' || a.status === 'review' || a.status === 'awaiting_install' || a.status === 'paused')) throw new Error('Offene Versuche zuerst beenden oder verwerfen.')
 
       const graph = this.graph(id)
 
@@ -368,7 +369,7 @@ export class ProjectEngine {
     // accepted attempt - silently marking it 'accepted' again with no new
     // check ever having run. Caught in a self-review.
     const previous = current.attempts.filter(a => a.taskId === taskId)
-    if (previous.some(a => a.status === 'review' || a.status === 'running' || a.status === 'awaiting_permission')) throw new Error('Vorherigen Versuch zuerst prüfen oder verwerfen.')
+    if (previous.some(a => a.status === 'review' || a.status === 'running' || a.status === 'awaiting_permission' || a.status === 'awaiting_install')) throw new Error('Vorherigen Versuch zuerst prüfen oder verwerfen.')
     if (previous.some(a => a.status === 'escalated')) throw new Error('Architektur-Eskalation erfordert eine überarbeitete Spezifikation.')
     if (previous.some(a => a.commit && a.status !== 'accepted')) throw new Error('Eine Integration dieses Tasks ist offen. Bitte deren Prüfung wiederholen, bevor ein neuer Versuch startet.')
     const retry = previous.at(-1)
@@ -467,17 +468,18 @@ export class ProjectEngine {
   private async agent(id: string, attempt: TaskAttempt, executorId: string, stage: WorkflowStage, prompt: string,
     readonly: boolean, signal: AbortSignal, tier: PermissionTier = readonly ? 'read-only' : 'read-write', resumeSessionId?: string): Promise<string> {
     if (signal.aborted) throw new Error('Abgebrochen.')
-    // Claude Code and Antigravity have no sandboxed middle ground between
-    // 'read-write' (no shell at all) and 'full' - real coding work almost
-    // always needs at least one shell command, so a plain read-write attempt
-    // predictably burns a whole wasted turn (every shell call denied, no
-    // real progress) before the reactive elevation ask further below ever
-    // triggers. Ask up front instead, for exactly these two executors -
-    // Codex's read-write tier already maps to a sandboxed shell
-    // (workspace-write), so it's excluded; readonly (review/finalReview)
-    // calls never reach here. Live-measured: 18 denied tool calls and a
-    // wasted implement turn on a real project before this fix.
-    if (!readonly && tier === 'read-write' && (executorId === 'claude-code-cli' || executorId === 'google-antigravity-cli')) {
+    // Claude Code, Antigravity and Grok Build have no sandboxed middle ground
+    // between 'read-write' (no shell at all) and 'full' - real coding work
+    // almost always needs at least one shell command, so a plain read-write
+    // attempt predictably burns a whole wasted turn (every shell call denied,
+    // no real progress) before the reactive elevation ask further below ever
+    // triggers. Ask up front instead, for exactly these executors - Codex's
+    // read-write tier already maps to a sandboxed shell (workspace-write), so
+    // it's excluded; readonly (review/finalReview) calls never reach here.
+    // Live-measured: 18 denied tool calls and a wasted implement turn on a
+    // real project before this fix. Grok's read-write --tools list also
+    // omits run_terminal_command, so the same wasted turn applies there.
+    if (!readonly && tier === 'read-write' && (executorId === 'claude-code-cli' || executorId === 'google-antigravity-cli' || executorId === 'grok-build-cli')) {
       const granted = await this.requestPermissionElevation(id, attempt, ['Shell-/Terminal-Befehle'], signal)
       if (signal.aborted) throw new Error('Abgebrochen.')
       attempt.status = 'running'
@@ -488,9 +490,13 @@ export class ProjectEngine {
     const runtime = attempt.runtime ??= { activeMs: 0, corrections: 0, calls: [] }
     const budget = this.state(id).taskBudgets?.[attempt.taskId] ?? this.state(id).budget ?? DEFAULT_TASK_BUDGET
     const usage = this.taskUsage(id, attempt)
+    // Continuation of the same fix (pause-resume, or permission elevation
+    // via resumeSession) must not consume another correction slot - the
+    // original turn already did. Detect that before overwriting runtime.stage.
+    const continuingFix = !readonly && stage === 'fix' && (runtime.stage === 'fix' || !!resumeSessionId)
     runtime.checkpoint = readonly ? 'review' : stage === 'fix' ? 'fix' : 'implement'
     if (usage.calls >= budget.maxCalls) throw new TaskControlError('budget', `Aufrufbudget erreicht (${usage.calls}/${budget.maxCalls}). Budget anpassen und fortsetzen.`)
-    if (!readonly && stage === 'fix' && usage.corrections >= budget.maxCorrections) throw new TaskControlError('budget', `Korrekturbudget erreicht (${usage.corrections}/${budget.maxCorrections}). Budget anpassen und fortsetzen.`)
+    if (!readonly && stage === 'fix' && !continuingFix && usage.corrections >= budget.maxCorrections) throw new TaskControlError('budget', `Korrekturbudget erreicht (${usage.corrections}/${budget.maxCorrections}). Budget anpassen und fortsetzen.`)
     runtime.stage = stage
     const path = attempt.worktree!.path
     const before = readonly ? await snapshotWorkspace(path) : undefined
@@ -499,7 +505,7 @@ export class ProjectEngine {
     let text = '', streamedText = '', done = false, sessionId: string | undefined, deniedActions: string[] = []
     const executor = this.ports.executor(executorId)
     const spec = { prompt, workingDirectory: path, permissionTier: tier }
-    if (!readonly && stage === 'fix') runtime.corrections++
+    if (!readonly && stage === 'fix' && !continuingFix) runtime.corrections++
     const metric = { id: randomUUID(), executorId, stage, startedAt: Date.now(), outcome: 'running' as 'running' | 'completed' | 'failed', inputChars: prompt.length, outputChars: 0,
       finishedAt: undefined as number | undefined, costUsd: undefined as number | undefined, inputTokens: undefined as number | undefined, outputTokens: undefined as number | undefined }
     runtime.calls.push(metric)
@@ -785,8 +791,10 @@ export class ProjectEngine {
         const scope = graph.tasks.find(t => t.id === attempt.taskId)!.scope.allowedPaths
         const scopeDecision = checkScope(diff.files.map(f => f.path), scope)
         if (scopeDecision.outcome === 'deny') throw new Error(`POLICY VIOLATION: ${scopeDecision.reason}`)
-        this.ports.emit(id, attempt.taskId, attempt.id, { kind: 'diff_captured', stage: 'implement', diff })
-        attempt.events.push({ kind: 'diff_captured', stage: 'implement', diff })
+        const diffEnvelope: WorkflowEvent = { kind: 'diff_captured', stage: 'implement', diff }
+        this.ports.emit(id, attempt.taskId, attempt.id, diffEnvelope)
+        attempt.events.push(diffEnvelope)
+        await this.ports.record?.(id, attempt.id, diffEnvelope)
         if (attempt.verification.some(v => !v.success)) {
           attempt.reviewPending = false
           if (cycle === 1) throw new Error(`Prüfungen oder Reviews weiterhin fehlgeschlagen.\n${correctionEvidence(attempt.verification, [])}`)
@@ -916,7 +924,7 @@ export class ProjectEngine {
       // Keep the task branch/worktree until integration verification succeeds.
       await gitOutput(attempt.worktree!.path, ['add', '-A'])
       if ((await gitOutput(attempt.worktree!.path, ['diff', '--cached', '--name-only'])).trim()) {
-        await gitOutput(attempt.worktree!.path, ['commit', '-m', `AI Council task ${taskId} attempt ${attempt.id}`])
+        await gitOutput(attempt.worktree!.path, ['-c', 'commit.gpgsign=false', 'commit', '-m', `AI Council task ${taskId} attempt ${attempt.id}`])
       }
       attempt.commit = (await gitOutput(attempt.worktree!.path, ['rev-parse', 'HEAD'])).trim()
       // Commit changes HEAD, so store the new fingerprint for a safe retry.

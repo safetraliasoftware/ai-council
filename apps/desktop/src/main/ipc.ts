@@ -4,7 +4,7 @@ import { ipcMain, BrowserWindow } from 'electron'
 import type { ProviderId } from '@ai-council/shared'
 import { runCompare, runTeam, runCouncil } from '@ai-council/council-core'
 import type { TeamStep } from '@ai-council/council-core'
-import { testAnthropicKey, testOpenAIKey, testGeminiKey } from '@ai-council/providers'
+import { testAnthropicKey, testOpenAIKey, testGeminiKey, testXaiKey } from '@ai-council/providers'
 import { ensureProjectRepository } from '@ai-council/coding'
 import type { CodingExecutor } from '@ai-council/coding'
 import { ElectronSecretStore } from './secret-store'
@@ -12,10 +12,12 @@ import { ModelConfig } from './model-config'
 import { BackendConfig } from './backend-config'
 import { WorkspaceConfig } from './workspace-config'
 import { LanguageConfig, type UiLanguage } from './language-config'
+import { OnboardingConfig } from './onboarding-config'
 import { createParticipantFactory } from './participant-factory'
-import { withAttachments } from './attachments'
+import { toInputFiles, withAttachments } from './attachments'
 import { listCompanyFacts } from './company-truth-store'
 import { withCompanyTruth } from './company-truth-format'
+import type { InputFile } from '@ai-council/shared'
 import type {
   SettingsState,
   TestKeyResult,
@@ -34,9 +36,14 @@ import type {
  * attached evidence. Shared by all three run handlers so Vergleichen/Team/
  * Council all ground the same way.
  */
-function buildContent(prompt: string, attachments: AttachedArtifact[] | undefined): string {
+async function buildRequest(
+  prompt: string,
+  attachments: AttachedArtifact[] | undefined
+): Promise<{ content: string; inputFiles?: InputFile[] }> {
   const withEvidence = withAttachments(prompt, attachments)
-  return withCompanyTruth(withEvidence, listCompanyFacts())
+  const content = withCompanyTruth(withEvidence, listCompanyFacts())
+  const inputFiles = await toInputFiles(attachments)
+  return inputFiles.length > 0 ? { content, inputFiles } : { content }
 }
 
 export function registerIpcHandlers(
@@ -46,13 +53,14 @@ export function registerIpcHandlers(
   executors: Record<CodingExecutorId, CodingExecutor>,
   backendConfig: BackendConfig,
   workspaceConfig: WorkspaceConfig,
-  languageConfig: LanguageConfig
+  languageConfig: LanguageConfig,
+  onboardingConfig: OnboardingConfig
 ): void {
   const activeRuns = new Map<string, AbortController>()
   const buildParticipant = createParticipantFactory(secretStore, modelConfig, executors, backendConfig)
 
   function getSettingsState(): SettingsState {
-    const providers: ProviderId[] = ['anthropic', 'openai', 'gemini']
+    const providers: ProviderId[] = ['anthropic', 'openai', 'gemini', 'xai']
     const result = {} as SettingsState
     for (const p of providers) {
       result[p] = { hasKey: secretStore.hasKey(p), model: modelConfig.getModel(p), backend: backendConfig.getBackend(p) }
@@ -117,6 +125,12 @@ export function registerIpcHandlers(
     languageConfig.setLanguage(language)
   })
 
+  ipcMain.handle('settings:getHasCompletedOnboarding', () => onboardingConfig.getHasCompletedOnboarding())
+
+  ipcMain.handle('settings:setHasCompletedOnboarding', (_e, value: boolean) => {
+    onboardingConfig.setHasCompletedOnboarding(value)
+  })
+
   ipcMain.handle('settings:getWorkspaceRoot', () => workspaceConfig.getWorkspaceRoot())
 
   ipcMain.handle('settings:setWorkspaceRoot', async (_e, path: string) => {
@@ -142,7 +156,8 @@ export function registerIpcHandlers(
     try {
       if (provider === 'anthropic') await testAnthropicKey(apiKey, model)
       else if (provider === 'openai') await testOpenAIKey(apiKey, model)
-      else await testGeminiKey(apiKey, model)
+      else if (provider === 'gemini') await testGeminiKey(apiKey, model)
+      else await testXaiKey(apiKey, model)
       return { ok: true }
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
@@ -164,9 +179,9 @@ export function registerIpcHandlers(
 
     try {
       const providers = await buildParticipant.prepare(req.providers)
-      const content = buildContent(req.prompt, req.attachments)
+      const { content, inputFiles } = await buildRequest(req.prompt, req.attachments)
       const controller = new AbortController()
-      const run = recordCouncilUsage(runCompare(providers, { messages: [{ role: 'user', content }] }, {
+      const run = recordCouncilUsage(runCompare(providers, { messages: [{ role: 'user', content }], inputFiles }, {
         signal: controller.signal
       }), { kind: 'compare' }, controller.signal)
       activeRuns.set(run.runId, controller)
@@ -186,9 +201,10 @@ export function registerIpcHandlers(
       const participants = await buildParticipant.prepare(req.steps.map(step => step.provider))
       const steps: TeamStep[] = req.steps.map((step, i) => ({ provider: participants[i], roleInstruction: step.roleInstruction }))
       const controller = new AbortController()
-      const run = recordCouncilUsage(runTeam(steps, buildContent(req.prompt, req.attachments), {
+      const { content, inputFiles } = await buildRequest(req.prompt, req.attachments)
+      const run = recordCouncilUsage(runTeam(steps, content, {
         signal: controller.signal
-      }), { kind: 'team' }, controller.signal)
+      }, inputFiles), { kind: 'team' }, controller.signal)
       activeRuns.set(run.runId, controller)
       void applicationRuns.track(() => controller.abort(), () => consumeAndForward(win, run.runId, run)).catch(error => console.error('Lauf konnte nicht abgeschlossen werden:', error))
       return { runId: run.runId }
@@ -204,11 +220,12 @@ export function registerIpcHandlers(
 
     try {
       const providers = await buildParticipant.prepare(req.providers)
+      const { content, inputFiles } = await buildRequest(req.prompt, req.attachments)
       const controller = new AbortController()
       const run = recordCouncilUsage(runCouncil({
         providers,
         chairId: req.chairId,
-        request: { messages: [{ role: 'user', content: buildContent(req.prompt, req.attachments) }] },
+        request: { messages: [{ role: 'user', content }], inputFiles },
         options: { signal: controller.signal }
       }), { kind: 'council' }, controller.signal)
       activeRuns.set(run.runId, controller)

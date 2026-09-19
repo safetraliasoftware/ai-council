@@ -140,6 +140,11 @@ it('archived attempts round-trip separately from active ones', async () => {
   expect(restored.archivedAttempts?.map(a => a.id)).toEqual(['old'])
 })
 
+it('projects a paused attempt as in_progress, not failed', async () => {
+  await saveExecution(fixtureExecution('paused'), fixtureGraph(), 'TaskPaused')
+  expect(readTaskGraph('p')?.tasks[0].status).toBe('in_progress')
+})
+
 it.each(['running', 'review', 'awaiting_permission', 'awaiting_install'] as const)('hasOpenAttempts is true while an attempt is %s', async status => {
   await saveExecution(fixtureExecution(status), fixtureGraph(), 'TaskStarted')
   expect(hasOpenAttempts('p')).toBe(true)

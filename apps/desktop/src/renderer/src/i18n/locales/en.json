@@ -74,11 +74,15 @@
     "notInstalled": "not installed",
     "allowFallback": "With \"Automatic\": fall back to the paid API if no local agent is available",
     "localAgentsHeading": "Set up local AI agents",
-    "localAgentsIntro": "Installation and sign-in happen outside this app via the provider's own official guide — the detected status here updates automatically once the CLI is available and signed in.",
+    "localAgentsIntro": "Installation and sign-in can be triggered directly below - this opens a terminal window with the provider's official command; you finish the rest (installation or browser login) there yourself. The detected status here updates automatically once the CLI is available and signed in.",
     "officialGuide": "Official guide",
     "installedAuth": "installed (auth: {{status}})",
     "notFound": "not found",
     "checking": "checking…",
+    "installButton": "Install",
+    "loginButton": "Log in",
+    "installLoginHint": "Terminal opened - the status here updates automatically once you switch back after finishing there.",
+    "installLoginFailed": "Could not open a terminal: {{error}}",
     "workspaceHeading": "Workshop folder",
     "workspaceIntro": "A shared folder for new projects. Set up here once as a Git repository; every new project then creates its own subfolder inside it without being rejected as \"inside another Git project\". Existing, separate Git projects elsewhere are unaffected.",
     "workspaceCurrentlySetup": "Currently set up: {{path}}",
@@ -114,6 +118,7 @@
     "notReported": "Not reported"
   },
   "codingEventDisplay": {
+    "statusStarting": "Starting…",
     "statusInit": "Session started",
     "statusThinkingTokens": "thinking…",
     "statusApiRetry": "Retrying connection…",
@@ -269,7 +274,10 @@
     "attachDiff": "Attach diff",
     "back": "Back",
     "noHistory": "No history available.",
-    "diffCaptureFailed": "Diff could not be captured."
+    "diffCaptureFailed": "Diff could not be captured.",
+    "tooManyFiles": "At most {{max}} file attachments.",
+    "pdfChip": "PDF: {{name}}",
+    "imageChip": "Image: {{name}}"
   },
   "changeRequests": {
     "statusPending": "Waiting for proposal",
@@ -400,7 +408,7 @@
   },
   "taskCoding": {
     "fallbackPointTitle": "Point {{n}}",
-    "description": "Runs the real, locally installed CLI (Claude Code, OpenAI Codex, or Gemini/Antigravity) using your own sign-in/subscription for that tool – no separate API key, no additional billing through the council.",
+    "description": "Runs the real, locally installed CLI (Claude Code, OpenAI Codex, Gemini/Antigravity, or Grok Build) using your own sign-in/subscription for that tool – no separate API key, no additional billing through the council.",
     "closeHistory": "Close history",
     "history": "History",
     "loading": "Loading…",
@@ -520,7 +528,7 @@
     "providerSetupIntro4": "(uses the local agent if available; only falls back to the paid API if you have explicitly allowed that via the checkbox).",
     "apiKeyTestIntro": "There is no format check for an API key - just paste it in and click",
     "apiKeyTestOutro": ", that is the only real verification.",
-    "localAgentAuthIntro": "For local agents, the app shows the detected sign-in status. For Claude Code this is a real check (signed in yes/no). For Codex and Antigravity, the sign-in status always shows",
+    "localAgentAuthIntro": "For local agents, the app shows the detected sign-in status. For Claude Code and Grok Build this is a real check (signed in yes/no). For Codex and Antigravity, the sign-in status always shows",
     "localAgentAuthOutro": "once the CLI is found - that is normal and not an error: as of now, neither CLI offers a way to query the sign-in status without a real run.",
     "workflowDetailHeading": "The Workflow tab in detail",
     "workflowIntro": "Before anything runs, a specification must be approved. A task graph created by the council breaks the goal down into individual tasks. Each task runs in its own isolated workspace (its own Git worktree) - implementer and reviewer (optionally also a challenger) check independently before anything is integrated into the project.",
@@ -555,5 +563,10 @@
     "supportHeading": "Support",
     "supportIntro": "Question or problem? Write to me directly.",
     "contactSupport": "Contact support"
+  },
+  "onboarding": {
+    "welcomeHeading": "Welcome to AI Council",
+    "welcomeIntro": "Set up at least one provider here to get started: either with your own API key, or via one of the supported AI agents (Claude Code, Codex, Antigravity, Grok Build) - installation and sign-in can be triggered directly below, which opens a terminal window you finish yourself. Everything here can be changed later in Settings at any time.",
+    "continueButton": "Continue to the app"
   }
 }

@@ -1,8 +1,7 @@
 import { app, shell, BrowserWindow } from 'electron'
 import { join } from 'path'
 import { existsSync, mkdirSync } from 'fs'
-import { is } from '@electron-toolkit/utils'
-import { ClaudeCodeCliExecutor, OpenAiCodexCliExecutor, GoogleAntigravityCliExecutor } from '@ai-council/coding'
+import { ClaudeCodeCliExecutor, OpenAiCodexCliExecutor, GoogleAntigravityCliExecutor, GrokBuildCliExecutor } from '@ai-council/coding'
 import type { CodingExecutor } from '@ai-council/coding'
 import { registerIpcHandlers } from './ipc'
 import { registerCodingIpcHandlers } from './coding-ipc'
@@ -18,6 +17,7 @@ import { ModelConfig } from './model-config'
 import { BackendConfig } from './backend-config'
 import { WorkspaceConfig } from './workspace-config'
 import { LanguageConfig } from './language-config'
+import { OnboardingConfig } from './onboarding-config'
 import type { CodingExecutorId } from './ipc-types'
 import { runCouncil } from '@ai-council/council-core'
 import { createParticipantFactory } from './participant-factory'
@@ -72,7 +72,10 @@ function createWindow(): void {
     return { action: 'deny' }
   })
 
-  if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
+  // ELECTRON_RENDERER_URL is set only by `electron-vite dev`. Do not read
+  // `app.isPackaged` at module load — extra main-process chunks from the
+  // provider SDKs used to re-require this file before `app` existed.
+  if (process.env['ELECTRON_RENDERER_URL']) {
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
@@ -90,6 +93,7 @@ app.whenReady().then(() => {
   const backendConfig = BackendConfig.loadFromDisk(configPath)
   const workspaceConfig = WorkspaceConfig.loadFromDisk(configPath)
   const languageConfig = LanguageConfig.loadFromDisk(configPath)
+  const onboardingConfig = OnboardingConfig.loadFromDisk(configPath)
 
   // Constructed once, shared by the Coding-tab IPC surface and by the
   // CouncilParticipant factory below - both use the very same instances,
@@ -98,10 +102,11 @@ app.whenReady().then(() => {
   const executors: Record<CodingExecutorId, CodingExecutor> = {
     'claude-code-cli': new ClaudeCodeCliExecutor(),
     'openai-codex-cli': new OpenAiCodexCliExecutor(),
-    'google-antigravity-cli': new GoogleAntigravityCliExecutor()
+    'google-antigravity-cli': new GoogleAntigravityCliExecutor(),
+    'grok-build-cli': new GrokBuildCliExecutor()
   }
 
-  registerIpcHandlers(() => mainWindow, secretStore, modelConfig, executors, backendConfig, workspaceConfig, languageConfig)
+  registerIpcHandlers(() => mainWindow, secretStore, modelConfig, executors, backendConfig, workspaceConfig, languageConfig, onboardingConfig)
   registerCodingIpcHandlers(() => mainWindow, executors)
   registerProjectsIpcHandlers()
   registerArtifactsIpcHandlers(() => mainWindow)
@@ -110,7 +115,7 @@ app.whenReady().then(() => {
   registerTaskGraphIpcHandlers(() => mainWindow, secretStore, modelConfig, executors, backendConfig)
   const buildParticipant = createParticipantFactory(secretStore, modelConfig, executors, backendConfig)
   const engine = registerTaskGraphExecutionIpcHandlers(() => mainWindow, executors, async (prompt, signal, chairId = 'anthropic', workingDirectory, projectId, kind = 'final_review') => {
-    const providers = await buildParticipant.prepare(['anthropic', 'openai', 'gemini'], workingDirectory)
+    const providers = await buildParticipant.prepareAvailable(workingDirectory)
     const run = recordCouncilUsage(runCouncil({ providers, chairId, request: { messages: [{ role: 'user', content: withCompanyTruth(prompt, listCompanyFacts()) }] }, options: { signal } }),
       { kind, projectId, workingDirectory }, signal)
     let text = ''

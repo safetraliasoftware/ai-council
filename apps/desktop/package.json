@@ -1,15 +1,15 @@
 {
   "name": "@ai-council/desktop",
-  "version": "0.1.1",
+  "version": "0.1.3",
   "description": "Desktop-App zum gemeinsamen Beauftragen von Claude, Gemini und ChatGPT",
   "main": "./out/main/index.js",
   "author": "Andre",
   "private": true,
   "scripts": {
-    "dev": "electron-vite dev",
-    "build": "electron-vite build",
-    "start": "electron-vite preview",
-    "dist": "electron-vite build && electron-builder",
+    "dev": "node scripts/run-electron-vite.cjs dev",
+    "build": "node scripts/run-electron-vite.cjs build",
+    "start": "node scripts/run-electron-vite.cjs preview",
+    "dist": "node scripts/run-electron-vite.cjs build && electron-builder",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "test": "vitest run"
   },

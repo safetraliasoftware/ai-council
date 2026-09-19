@@ -8,6 +8,7 @@ import type {
   ProviderCapabilities,
   ProviderEvent
 } from '@ai-council/shared'
+import { requestText, toOpenAIUserContent, UnsupportedInputFileError } from './input-files'
 
 export interface OpenAIProviderConfig {
   apiKey: string
@@ -40,7 +41,7 @@ export class OpenAIProvider implements AIProvider {
   }
 
   capabilities(): ProviderCapabilities {
-    return { streaming: true, tools: false, vision: false }
+    return { streaming: true, tools: false, vision: true }
   }
 
   async *generate(request: CouncilRequest, options?: GenerateOptions): AsyncIterable<ProviderEvent> {
@@ -48,6 +49,9 @@ export class OpenAIProvider implements AIProvider {
     yield { type: 'start', runId }
 
     try {
+      const files = request.inputFiles ?? []
+      const text = requestText(request.messages)
+      const userContent = files.length > 0 ? await toOpenAIUserContent(text, files) : text
       const stream = await this.client.chat.completions.create(
         {
           model: this.config.model,
@@ -57,7 +61,7 @@ export class OpenAIProvider implements AIProvider {
             ...(request.systemInstructions
               ? [{ role: 'system' as const, content: request.systemInstructions }]
               : []),
-            ...request.messages.map((m) => ({ role: m.role, content: m.content }))
+            { role: 'user' as const, content: userContent }
           ]
         },
         { signal: options?.signal }
@@ -85,6 +89,10 @@ export class OpenAIProvider implements AIProvider {
 
       yield { type: 'done', result: { text: fullText } }
     } catch (err) {
+      if (err instanceof UnsupportedInputFileError) {
+        yield { type: 'error', error: { providerId: 'openai', code: 'invalid_request', message: err.message, retryable: false } }
+        return
+      }
       yield { type: 'error', error: mapError(err) }
     }
   }

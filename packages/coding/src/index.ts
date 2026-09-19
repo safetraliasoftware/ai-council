@@ -5,6 +5,7 @@ export { formatPermissionDenialWarning, parsePermissionDenialWarning } from './p
 export { ClaudeCodeCliExecutor } from './executors/claude-code-cli'
 export { OpenAiCodexCliExecutor } from './executors/openai-codex-cli'
 export { GoogleAntigravityCliExecutor } from './executors/google-antigravity-cli'
+export { GrokBuildCliExecutor } from './executors/grok-build-cli'
 export { captureGitDiff, isGitRepo } from './workspace/git-diff'
 export type { GitDiffResult, GitFileChange, GitChangeStatus } from './workspace/git-diff'
 export { createWorktree, mergeWorktree, discardWorktree, ensureProjectRepository } from './workspace/git-worktree'

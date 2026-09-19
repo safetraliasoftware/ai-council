@@ -5,7 +5,7 @@ import { PROVIDER_LABELS } from '@ai-council/shared'
 import type { ChangeRequest, ChangeRequestSeverity } from '@ai-council/project-domain'
 import type { ChangeRequestEvaluatedEnvelope } from '../../../main/ipc-types'
 
-const ALL_PROVIDERS: ProviderId[] = ['anthropic', 'openai', 'gemini']
+const ALL_PROVIDERS: ProviderId[] = ['anthropic', 'openai', 'gemini', 'xai']
 const SEVERITIES: ChangeRequestSeverity[] = ['minor', 'architecture', 'security', 'compliance']
 const SEVERITY_KEYS: Record<ChangeRequestSeverity, string> = {
   minor: 'changeRequests.severityMinor',

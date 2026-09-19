@@ -74,11 +74,15 @@
     "notInstalled": "non installé",
     "allowFallback": "Avec « Automatique » : basculer vers l'API payante si aucun agent local n'est disponible",
     "localAgentsHeading": "Configurer les agents IA locaux",
-    "localAgentsIntro": "L'installation et la connexion se font hors de cette application, via le guide officiel du fournisseur concerné — le statut détecté ici se met à jour automatiquement dès que la CLI est disponible et connectée.",
+    "localAgentsIntro": "L'installation et la connexion peuvent être déclenchées directement ci-dessous - cela ouvre une fenêtre de terminal avec la commande officielle du fournisseur ; tu termines toi-même le reste (installation ou connexion via le navigateur). Le statut détecté ici se met à jour automatiquement dès que la CLI est disponible et connectée.",
     "officialGuide": "Guide officiel",
     "installedAuth": "installé (authentification : {{status}})",
     "notFound": "introuvable",
     "checking": "vérification…",
+    "installButton": "Installer",
+    "loginButton": "Se connecter",
+    "installLoginHint": "Terminal ouvert - le statut ici se met à jour automatiquement une fois que tu reviens ici après avoir terminé.",
+    "installLoginFailed": "Impossible d'ouvrir un terminal : {{error}}",
     "workspaceHeading": "Dossier atelier",
     "workspaceIntro": "Un dossier commun pour les nouveaux projets. Configuré ici une seule fois comme dépôt Git ; chaque nouveau projet se crée ensuite comme sous-dossier séparé, sans être rejeté comme se trouvant « à l'intérieur d'un autre projet Git ». Les projets Git existants et distincts ailleurs ne sont pas affectés.",
     "workspaceCurrentlySetup": "Actuellement configuré : {{path}}",
@@ -114,6 +118,7 @@
     "notReported": "Non signalé"
   },
   "codingEventDisplay": {
+    "statusStarting": "Démarrage…",
     "statusInit": "Session démarrée",
     "statusThinkingTokens": "réflexion en cours…",
     "statusApiRetry": "Nouvelle tentative de connexion…",
@@ -269,7 +274,10 @@
     "attachDiff": "Joindre le diff",
     "back": "Retour",
     "noHistory": "Aucun historique disponible.",
-    "diffCaptureFailed": "Le diff n'a pas pu être capturé."
+    "diffCaptureFailed": "Le diff n'a pas pu être capturé.",
+    "tooManyFiles": "Au plus {{max}} fichiers joints.",
+    "pdfChip": "PDF : {{name}}",
+    "imageChip": "Image : {{name}}"
   },
   "changeRequests": {
     "statusPending": "En attente d'une proposition",
@@ -400,7 +408,7 @@
   },
   "taskCoding": {
     "fallbackPointTitle": "Point {{n}}",
-    "description": "Exécute la véritable CLI installée localement (Claude Code, OpenAI Codex ou Gemini/Antigravity) en utilisant ta propre connexion/abonnement à cet outil – pas de clé API séparée, pas de facturation supplémentaire via le council.",
+    "description": "Exécute la véritable CLI installée localement (Claude Code, OpenAI Codex, Gemini/Antigravity ou Grok Build) en utilisant ta propre connexion/abonnement à cet outil – pas de clé API séparée, pas de facturation supplémentaire via le council.",
     "closeHistory": "Fermer l'historique",
     "history": "Historique",
     "loading": "Chargement…",
@@ -520,7 +528,7 @@
     "providerSetupIntro4": "(utilise l'agent local si disponible ; ne bascule vers l'API payante que si tu l'as explicitement autorisé via la case à cocher).",
     "apiKeyTestIntro": "Il n'y a pas de vérification de format pour une clé API - colle-la simplement et clique sur",
     "apiKeyTestOutro": ", c'est la seule véritable vérification.",
-    "localAgentAuthIntro": "Pour les agents locaux, l'application affiche le statut de connexion détecté. Pour Claude Code, c'est une vérification réelle (connecté oui/non). Pour Codex et Antigravity, le statut de connexion affiche toujours",
+    "localAgentAuthIntro": "Pour les agents locaux, l'application affiche le statut de connexion détecté. Pour Claude Code et Grok Build, c'est une vérification réelle (connecté oui/non). Pour Codex et Antigravity, le statut de connexion affiche toujours",
     "localAgentAuthOutro": "dès que la CLI est trouvée - c'est normal et non une erreur : à ce jour, aucune des deux CLI ne propose de moyen de connaître le statut de connexion sans une exécution réelle.",
     "workflowDetailHeading": "L'onglet Workflow en détail",
     "workflowIntro": "Avant toute exécution, une spécification doit être approuvée. Un graphe de tâches créé par le council décompose l'objectif en tâches individuelles. Chaque tâche s'exécute dans son propre espace de travail isolé (son propre worktree Git) - implementer et reviewer (optionnellement aussi un challenger) vérifient indépendamment avant que quoi que ce soit soit intégré au projet.",
@@ -555,5 +563,10 @@
     "supportHeading": "Support",
     "supportIntro": "Une question ou un problème ? Écris-moi directement.",
     "contactSupport": "Contacter le support"
+  },
+  "onboarding": {
+    "welcomeHeading": "Bienvenue sur AI Council",
+    "welcomeIntro": "Configure ici au moins un fournisseur pour commencer : soit avec ta propre clé API, soit via l'un des agents IA pris en charge (Claude Code, Codex, Antigravity, Grok Build) - l'installation et la connexion peuvent être déclenchées directement ci-dessous, ce qui ouvre une fenêtre de terminal que tu termines toi-même. Tout ceci peut être modifié plus tard dans les paramètres, à tout moment.",
+    "continueButton": "Continuer vers l'application"
   }
 }

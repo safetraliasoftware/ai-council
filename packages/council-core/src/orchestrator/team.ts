@@ -1,6 +1,6 @@
 import { RunUsageTracker } from '../run-usage'
 import { randomUUID } from 'node:crypto'
-import type { CouncilParticipant, CouncilRequest, GenerateOptions } from '@ai-council/shared'
+import type { CouncilParticipant, CouncilRequest, GenerateOptions, InputFile } from '@ai-council/shared'
 import type { CouncilRun, CouncilRunEvent } from '../events'
 
 export interface TeamStep {
@@ -26,7 +26,8 @@ export interface TeamStep {
 export function runTeam(
   steps: TeamStep[],
   initialPrompt: string,
-  options?: GenerateOptions
+  options?: GenerateOptions,
+  inputFiles?: InputFile[]
 ): CouncilRun {
   const runId = randomUUID()
   const usage = new RunUsageTracker()
@@ -41,7 +42,8 @@ export function runTeam(
           : `Ursprüngliche Aufgabe:\n${initialPrompt}\n\nErgebnis des vorherigen Schritts:\n${context}\n\nDeine Aufgabe: ${step.roleInstruction}`
       const request: CouncilRequest = {
         systemInstructions: i === 0 ? step.roleInstruction : undefined,
-        messages: [{ role: 'user', content: userPrompt }]
+        messages: [{ role: 'user', content: userPrompt }],
+        ...(inputFiles?.length ? { inputFiles } : {})
       }
 
       let stepFailed = false

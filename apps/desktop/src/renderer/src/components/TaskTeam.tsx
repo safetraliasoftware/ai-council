@@ -8,8 +8,9 @@ import type { CouncilRunEvent } from '@ai-council/council-core'
 import type { AttachedArtifact, SettingsState, TeamStepDto } from '../../../main/ipc-types'
 import AttachmentPicker from '../AttachmentPicker'
 import CompanyTruthToggle from '../CompanyTruthToggle'
+import { createRunEventGate } from '../runEventGate'
 
-const ALL_PROVIDERS: ProviderId[] = ['anthropic', 'openai', 'gemini']
+const ALL_PROVIDERS: ProviderId[] = ['anthropic', 'openai', 'gemini', 'xai']
 
 interface StepResult {
   text: string
@@ -30,15 +31,17 @@ export default function TaskTeam({ settings }: { settings: SettingsState }): Rea
   const [usage, setUsage] = useState<CouncilCallUsage[]>([])
   const [results, setResults] = useState<StepResult[]>([])
   const [startError, setStartError] = useState('')
-  const currentRunId = useRef<string>('')
+  const gate = useRef(createRunEventGate()).current
+  const applyEvent = useRef<(e: CouncilRunEvent) => void>(() => {})
 
   useEffect(() => {
-    const off = window.api.task.onEvent((e: CouncilRunEvent) => {
+    const apply = (e: CouncilRunEvent): void => {
       if (e.kind === 'run_done') {
-        if (e.runId === currentRunId.current) { setRunning(false); setUsage(e.usage ?? []) }
+        setRunning(false)
+        setUsage(e.usage ?? [])
         return
       }
-      if (e.runId !== currentRunId.current || e.stepIndex === undefined) return
+      if (e.stepIndex === undefined) return
       const stepIndex = e.stepIndex
       const event = e.event
       setResults((r) => {
@@ -66,9 +69,14 @@ export default function TaskTeam({ settings }: { settings: SettingsState }): Rea
         }
         return next
       })
+    }
+    applyEvent.current = apply
+    const off = window.api.task.onEvent((raw: CouncilRunEvent) => {
+      const e = gate.take(raw)
+      if (e) apply(e)
     })
     return off
-  }, [])
+  }, [gate])
 
   const addStep = (): void => {
     setSteps((s) => [...s, { provider: 'gemini', roleInstruction: '' }])
@@ -88,20 +96,22 @@ export default function TaskTeam({ settings }: { settings: SettingsState }): Rea
     setUsage([])
     setStartError('')
     setResults(steps.map(() => ({ text: '', done: false })))
+    gate.begin()
     const { runId, error } = await window.api.task.runTeam({ prompt, steps, attachments })
     if (!runId) {
       // An empty runId means the run never started (e.g. the same provider
       // was picked for two steps) - without this, "Läuft…" was left stuck
       // forever with no explanation.
+      gate.fail()
       setRunning(false)
-      setStartError(t('taskTeam.startFailed'))
+      setStartError(error ?? t('taskTeam.startFailed'))
       return
     }
-    currentRunId.current = runId
+    for (const e of gate.commit(runId)) applyEvent.current(e)
   }
 
   const cancel = async (): Promise<void> => {
-    if (currentRunId.current) await window.api.task.cancel(currentRunId.current)
+    if (gate.id) await window.api.task.cancel(gate.id)
     setRunning(false)
   }
 

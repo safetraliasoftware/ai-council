@@ -145,4 +145,62 @@ describe('runCouncil', () => {
     expect(events.some(e => e.kind === 'provider_event' && e.providerId === 'gemini' && e.event.type === 'done')).toBe(false)
     expect(events.some(e => e.kind === 'provider_event' && e.providerId === 'gemini' && e.stage === 'revision')).toBe(false)
   })
+
+  it('copies inputFiles onto critique, revision and synthesis requests', async () => {
+    const seen: { stage: string; files: string[] }[] = []
+    const tracking: CouncilParticipant = {
+      id: 'anthropic',
+      backend: 'api',
+      capabilities: () => ({ streaming: true, tools: false, vision: true }),
+      async *generate(request: CouncilRequest): AsyncIterable<CouncilParticipantEvent> {
+        const stage = request.messages[0].content.includes('Kritisiere')
+          ? 'critique'
+          : request.messages[0].content.includes('Überarbeite')
+            ? 'revision'
+            : request.messages[0].content.includes('Vorsitz')
+              ? 'synthesis'
+              : 'independent'
+        seen.push({ stage, files: (request.inputFiles ?? []).map((f) => f.path) })
+        yield { type: 'start', runId: 'mock' }
+        yield { type: 'done', result: { text: `${stage}-ok` } }
+      }
+    }
+    const files = [{ filename: 'shot.png', mimeType: 'image/png', path: 'C:\\tmp\\shot.png' }]
+    for await (const _ of runCouncil({
+      providers: [tracking, makeMockProvider('openai')],
+      chairId: 'anthropic',
+      request: { messages: [{ role: 'user', content: 'Beschreibe das Bild.' }], inputFiles: files }
+    }).events) { /* drain */ }
+
+    expect(seen.some((s) => s.stage === 'independent' && s.files[0] === 'C:\\tmp\\shot.png')).toBe(true)
+    expect(seen.some((s) => s.stage === 'critique' && s.files[0] === 'C:\\tmp\\shot.png')).toBe(true)
+    expect(seen.some((s) => s.stage === 'revision' && s.files[0] === 'C:\\tmp\\shot.png')).toBe(true)
+    expect(seen.some((s) => s.stage === 'synthesis' && s.files[0] === 'C:\\tmp\\shot.png')).toBe(true)
+  })
+
+  it('copies inputFiles onto compact synthesis', async () => {
+    const filesOnSynthesis: string[][] = []
+    const chair: CouncilParticipant = {
+      id: 'openai',
+      backend: 'api',
+      capabilities: () => ({ streaming: true, tools: false, vision: true }),
+      async *generate(request: CouncilRequest): AsyncIterable<CouncilParticipantEvent> {
+        if (request.messages[0].content.includes('konsolidiere')) {
+          filesOnSynthesis.push((request.inputFiles ?? []).map((f) => f.path))
+        }
+        yield { type: 'start', runId: 'mock' }
+        yield { type: 'done', result: { text: 'ok' } }
+      }
+    }
+    for await (const _ of runCouncil({
+      deliberation: 'compact',
+      providers: [chair],
+      chairId: 'openai',
+      request: {
+        messages: [{ role: 'user', content: 'Build a calculator' }],
+        inputFiles: [{ filename: 'spec.pdf', mimeType: 'application/pdf', path: '/tmp/spec.pdf' }]
+      }
+    }).events) { /* drain */ }
+    expect(filesOnSynthesis).toEqual([['/tmp/spec.pdf']])
+  })
 })

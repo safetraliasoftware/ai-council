@@ -1,6 +1,6 @@
 # AI Council
 
-Desktop-App (Windows, Electron) zum gemeinsamen Beauftragen von Claude, ChatGPT/Codex und Gemini — sowohl als API-gestützte Diskussionsteilnehmer als auch als echte, lokal angemeldete CLI-Coding-Agenten in einer vollständigen Engineering-Pipeline: Spezifikation → Council → Taskgraph → Ausführung → Freigabe.
+Desktop-App (Windows, Electron) zum gemeinsamen Beauftragen von Claude, ChatGPT/Codex, Gemini und Grok — sowohl als API-gestützte Diskussionsteilnehmer als auch als echte, lokal angemeldete CLI-Coding-Agenten in einer vollständigen Engineering-Pipeline: Spezifikation → Council → Taskgraph → Ausführung → Freigabe.
 
 ## Download
 
@@ -19,13 +19,14 @@ Eine ausführliche Erklärung aller Begriffe (Task-Status, Scopes, Einrichtung d
 
 ## Anbieter einrichten
 
-Pro Anbieter (Claude, ChatGPT, Gemini) lässt sich in den Einstellungen zwischen **API** (eigener API-Key), **lokal** (installierter CLI-Agent) und **Automatisch** wählen:
+Pro Anbieter (Claude, ChatGPT, Gemini, Grok) lässt sich in den Einstellungen zwischen **API** (eigener API-Key), **lokal** (installierter CLI-Agent) und **Automatisch** wählen:
 
 | Anbieter | Lokaler Agent | Offizielle Anleitung |
 |---|---|---|
 | Claude | Claude Code (`claude`) | https://code.claude.com/docs/en/quickstart |
 | ChatGPT | Codex (`codex`) | https://developers.openai.com/codex/cli |
 | Gemini | Antigravity (`agy`) | https://antigravity.google/docs/cli/getting-started/ |
+| Grok | Grok Build (`grok`) | https://docs.x.ai/build/overview |
 
 Installation und Anmeldung der CLIs laufen jeweils über die offizielle Anleitung des Anbieters — AI Council erkennt den Status automatisch, sobald die CLI verfügbar ist.
 

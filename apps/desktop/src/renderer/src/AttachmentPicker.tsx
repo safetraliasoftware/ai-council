@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
-import type { AttachedArtifact, CodingLogEntry, HistoryListEntry, HistoryRunRecord } from '../../main/ipc-types'
+import { MAX_FILE_ATTACHMENTS, type AttachedArtifact, type CodingLogEntry, type HistoryListEntry, type HistoryRunRecord } from '../../main/ipc-types'
 
 /**
  * Shared between TaskParallel, TaskTeam and TaskCouncil - lets a
@@ -29,6 +29,13 @@ function isText(entry: CodingLogEntry): entry is Extract<CodingLogEntry, { kind:
   return entry.kind === 'text'
 }
 
+function fileChipLabel(artifact: AttachedArtifact, t: TFunction): string {
+  const name = artifact.filename ?? artifact.label
+  if (artifact.mimeType === 'application/pdf') return t('attachmentPicker.pdfChip', { name })
+  if (artifact.mimeType?.startsWith('image/')) return t('attachmentPicker.imageChip', { name })
+  return name
+}
+
 /** Turns a saved run-history record into an attachable artifact. */
 function formatHistoryArtifact(record: HistoryRunRecord, t: TFunction): AttachedArtifact {
   if (record.kind === 'coding') {
@@ -36,6 +43,7 @@ function formatHistoryArtifact(record: HistoryRunRecord, t: TFunction): Attached
     const done = record.logs.find((l): l is Extract<CodingLogEntry, { kind: 'done' }> => l.kind === 'done')
     const body = texts.length > 0 ? texts.join('\n\n') : (done?.summary ?? t('attachmentPicker.noTextResponse'))
     return {
+      kind: 'inline-text',
       label: t('attachmentPicker.codingRunLabel', { prompt: record.prompt.slice(0, 60) }),
       text: truncate(`${t('attachmentPicker.taskLine', { task: record.prompt })}\n\n${body}`, t)
     }
@@ -53,6 +61,7 @@ function formatHistoryArtifact(record: HistoryRunRecord, t: TFunction): Attached
     : t('attachmentPicker.resultStopped', { reason: record.finalResult.reason ? `: ${record.finalResult.reason}` : '' })
 
   return {
+    kind: 'inline-text',
     label: t('attachmentPicker.workflowRunLabel', { task: record.task.slice(0, 60) }),
     text: truncate(
       [
@@ -113,6 +122,11 @@ export default function AttachmentPicker({ attachments, onChange }: AttachmentPi
   }
 
   const attachFile = async (): Promise<void> => {
+    const fileCount = attachments.filter((a) => a.kind === 'file').length
+    if (fileCount >= MAX_FILE_ATTACHMENTS) {
+      setMessage({ text: t('attachmentPicker.tooManyFiles', { max: MAX_FILE_ATTACHMENTS }) })
+      return
+    }
     setBusy(true)
     setMessage(undefined)
     const result = await window.api.artifacts.readFile()
@@ -148,9 +162,9 @@ export default function AttachmentPicker({ attachments, onChange }: AttachmentPi
               key={i}
               className="badge"
               style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
-              title={a.text.slice(0, 300)}
+              title={a.kind === 'file' ? (a.filename ?? a.label) : (a.text ?? a.label).slice(0, 300)}
             >
-              {a.label}
+              {a.kind === 'file' ? fileChipLabel(a, t) : a.label}
               <button className="secondary" style={{ padding: '0 6px' }} onClick={() => remove(i)}>
                 ×
               </button>

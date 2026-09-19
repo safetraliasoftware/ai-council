@@ -88,7 +88,7 @@ beforeEach(async () => {
         if (task.status === 'invalidated' || task.status === 'needs_revalidation') continue
         const attempt = [...state.attempts].reverse().find(a => a.taskId === task.id)
         if (attempt) task.status = attempt.status === 'accepted' ? 'accepted' : attempt.status === 'review' ? 'review'
-          : (attempt.status === 'running' || attempt.status === 'awaiting_permission' || attempt.status === 'awaiting_install') ? 'in_progress' : 'failed'
+          : (attempt.status === 'running' || attempt.status === 'awaiting_permission' || attempt.status === 'awaiting_install' || attempt.status === 'paused') ? 'in_progress' : 'failed'
       }
     },
     saveGraph: async (_id, nextGraph) => { graph = structuredClone(nextGraph) },
@@ -749,6 +749,19 @@ describe('ChangeRequest lifecycle (targeted revalidation)', { timeout: 30000 }, 
     await expect(engine.applyChangeRequest('p', 'cr-1')).rejects.toThrow(/bereits angewendet/)
   })
 
+  it.each(['paused', 'awaiting_install'] as const)('refuses to apply a ChangeRequest while an attempt is %s', async (status) => {
+    graph = diamondGraph()
+    const spec2: ProjectSpecification = { ...spec, version: 2, status: 'human_approved' }
+    ports.spec = (_id, version) => (version === 2 ? spec2 : spec)
+    changeRequests = [approvedChangeRequest()]
+    persisted = {
+      projectId: 'p', runId: 'r', specVersion: 1, phase: 'execution', commands: [], maxAttempts: 3, updatedAt: 0,
+      attempts: [{ id: 'a', taskId: 'ROOT', specVersion: 1, startedAt: 0, status, implementerId: 'one', reviewerId: 'two', verification: [], reviews: [], events: [] }]
+    }
+    const engine = new ProjectEngine(ports)
+    await expect(engine.applyChangeRequest('p', 'cr-1')).rejects.toThrow(/Offene Versuche/)
+  })
+
   it('rejects applying a ChangeRequest whose linked spec version is not yet approved', async () => {
     graph = diamondGraph()
     const spec2: ProjectSpecification = { ...spec, version: 2, status: 'council_generated' }
@@ -1141,8 +1154,8 @@ describe('permission elevation on denial (Taskgraph-Ausführung only)', { timeou
   })
 })
 
-describe('proactive permission elevation before implement/fix (Claude Code & Antigravity only)', { timeout: 60000 }, () => {
-  it.each(['claude-code-cli', 'google-antigravity-cli'])(
+describe('proactive permission elevation before implement/fix (Claude Code, Antigravity & Grok Build)', { timeout: 60000 }, () => {
+  it.each(['claude-code-cli', 'google-antigravity-cli', 'grok-build-cli'])(
     'requests full access before the very first %s implement call, without a wasted read-write turn first', async implementerId => {
       const original = ports.executor('one')
       const tiers: (string | undefined)[] = []

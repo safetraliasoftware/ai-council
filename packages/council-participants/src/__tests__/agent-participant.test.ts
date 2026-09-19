@@ -68,6 +68,22 @@ describe('toAgentCouncilParticipant', () => {
     expect(participant.backend).toBe('local_agent')
   })
 
+  it('lists attached inputFiles as absolute paths in the prompt and does not copy them into the working directory', async () => {
+    let capturedSpec: CodingTaskSpec | undefined
+    const outside = join(dir, 'shot.png')
+    writeFileSync(outside, 'png')
+    const participant = toAgentCouncilParticipant('anthropic', fakeExecutor([{ type: 'done', summary: 'ok' }], (spec) => {
+      capturedSpec = spec
+    }), dir)
+    for await (const _ of participant.generate({
+      messages: [{ role: 'user', content: 'Beschreibe das Bild.' }],
+      inputFiles: [{ filename: 'shot.png', mimeType: 'image/png', path: outside }]
+    })) { /* drain */ }
+    expect(capturedSpec?.prompt).toContain(outside)
+    expect(capturedSpec?.prompt).toContain('nicht verändern')
+    expect(capturedSpec?.workingDirectory).toBe(dir)
+  })
+
   it('always forces permissionTier to read-only, regardless of anything else', async () => {
     let capturedSpec: CodingTaskSpec | undefined
     await collect('anthropic', fakeExecutor([{ type: 'done', summary: 'ok' }], (spec) => {

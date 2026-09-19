@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises'
 import { basename } from 'node:path'
 import { captureGitDiff, isGitRepo } from '@ai-council/coding'
 import type { AttachedArtifact, CaptureDiffResult } from './ipc-types'
+import { MAX_FILE_BYTES, MAX_INLINE_CHARS, classifyFile } from './attachment-files'
 
 /**
  * Lets Vergleichen/Team/Council attach real evidence (a git diff, a local
@@ -14,12 +15,9 @@ import type { AttachedArtifact, CaptureDiffResult } from './ipc-types'
  * @ai-council/council-core - council-core itself never sees this module.
  */
 
-const MAX_ARTIFACT_CHARS = 30000
-const NULL_BYTE = String.fromCharCode(0)
-
 function truncate(text: string, label: string): string {
-  if (text.length <= MAX_ARTIFACT_CHARS) return text
-  return text.slice(0, MAX_ARTIFACT_CHARS) + '\n\n[... gekuerzt, ' + label + ' war laenger als ' + MAX_ARTIFACT_CHARS + ' Zeichen ...]'
+  if (text.length <= MAX_INLINE_CHARS) return text
+  return text.slice(0, MAX_INLINE_CHARS) + '\n\n[... gekuerzt, ' + label + ' war laenger als ' + MAX_INLINE_CHARS + ' Zeichen ...]'
 }
 
 export function registerArtifactsIpcHandlers(getWindow: () => BrowserWindow | null): void {
@@ -42,6 +40,7 @@ export function registerArtifactsIpcHandlers(getWindow: () => BrowserWindow | nu
       diff.diff.trim() || '(kein Inhalt-Diff fuer die gelisteten Dateien)'
     ].join('\n\n')
     const artifact: AttachedArtifact = {
+      kind: 'inline-text',
       label: 'Git-Diff: ' + basename(workingDirectory),
       text: truncate(text, 'der Diff')
     }
@@ -51,25 +50,49 @@ export function registerArtifactsIpcHandlers(getWindow: () => BrowserWindow | nu
   ipcMain.handle('artifacts:readFile', async (): Promise<CaptureDiffResult> => {
     const win = getWindow()
     if (!win) return { ok: false, error: 'Kein Fenster verfuegbar.' }
-    const result = await dialog.showOpenDialog(win, { properties: ['openFile'] })
+    const result = await dialog.showOpenDialog(win, {
+      properties: ['openFile'],
+      filters: [
+        { name: 'Text, Bilder, PDF', extensions: ['txt', 'md', 'csv', 'json', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'pdf'] },
+        { name: 'Alle Dateien', extensions: ['*'] }
+      ]
+    })
     if (result.canceled || result.filePaths.length === 0) return { ok: false }
 
     const path = result.filePaths[0]
-    let content: string
+    let bytes: Buffer
     try {
-      content = await readFile(path, 'utf-8')
+      bytes = await readFile(path)
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }
-    // A null byte is a reliable enough signal this isn't text (utf-8 decoding
-    // of arbitrary binary data doesn't throw, it just produces garbage).
-    if (content.includes(NULL_BYTE)) {
-      return { ok: false, error: 'Datei sieht nach Binaerinhalt aus, nicht nach Text.' }
+    if (bytes.length > MAX_FILE_BYTES) {
+      return { ok: false, error: `Datei ist größer als ${MAX_FILE_BYTES / (1024 * 1024)} MB.` }
+    }
+
+    const classified = classifyFile(basename(path), bytes)
+    if (classified.kind === 'unsupported') {
+      return { ok: false, error: 'Nur Text, Bilder (PNG/JPEG/GIF/WebP) oder PDF können angehängt werden.' }
+    }
+    if (classified.kind === 'text') {
+      const artifact: AttachedArtifact = {
+        kind: 'inline-text',
+        label: 'Datei: ' + basename(path),
+        text: truncate(bytes.toString('utf-8'), 'die Datei'),
+        filename: basename(path),
+        mimeType: classified.mimeType,
+        byteLength: bytes.length
+      }
+      return { ok: true, artifact }
     }
 
     const artifact: AttachedArtifact = {
-      label: 'Datei: ' + basename(path),
-      text: truncate(content, 'die Datei')
+      kind: 'file',
+      label: basename(path),
+      path,
+      filename: basename(path),
+      mimeType: classified.mimeType,
+      byteLength: bytes.length
     }
     return { ok: true, artifact }
   })

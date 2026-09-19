@@ -71,7 +71,10 @@ const api = {
     setWorkspaceRoot: (path: string): Promise<WorktreeActionResult> =>
       ipcRenderer.invoke('settings:setWorkspaceRoot', path),
     getLanguage: (): Promise<UiLanguage> => ipcRenderer.invoke('settings:getLanguage'),
-    setLanguage: (language: UiLanguage): Promise<void> => ipcRenderer.invoke('settings:setLanguage', language)
+    setLanguage: (language: UiLanguage): Promise<void> => ipcRenderer.invoke('settings:setLanguage', language),
+    getHasCompletedOnboarding: (): Promise<boolean> => ipcRenderer.invoke('settings:getHasCompletedOnboarding'),
+    setHasCompletedOnboarding: (value: boolean): Promise<void> =>
+      ipcRenderer.invoke('settings:setHasCompletedOnboarding', value)
   },
   task: {
     runParallel: (req: ParallelRunRequestDto): Promise<{ runId: string; error?: string }> =>
@@ -94,6 +97,10 @@ const api = {
       ipcRenderer.invoke('coding:detect', executorId),
     detectAll: (): Promise<Record<CodingExecutorId, ExecutorAvailability>> =>
       ipcRenderer.invoke('coding:detectAll'),
+    installExecutor: (executorId: CodingExecutorId): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke('coding:installExecutor', executorId),
+    loginExecutor: (executorId: CodingExecutorId): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke('coding:loginExecutor', executorId),
     pickDirectory: (): Promise<string | undefined> => ipcRenderer.invoke('coding:pickDirectory'),
     startTask: (req: StartCodingTaskDto): Promise<{ taskId: string; error?: string }> =>
       ipcRenderer.invoke('coding:startTask', req),

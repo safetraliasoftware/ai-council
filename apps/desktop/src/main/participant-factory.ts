@@ -5,6 +5,7 @@ import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import type { CouncilParticipant, ProviderId } from '@ai-council/shared'
+import { PROVIDER_LABELS } from '@ai-council/shared'
 import type { CodingExecutor, ExecutorAvailability } from '@ai-council/coding'
 import { isGitRepo } from '@ai-council/coding'
 import { toAgentCouncilParticipant, toApiCouncilParticipant } from '@ai-council/council-participants'
@@ -21,12 +22,17 @@ const execFileAsync = promisify(execFile)
 /**
  * Fixed by construction - there's no scenario where e.g. the Codex CLI plays
  * the "Gemini" council seat, so a per-provider backend choice only ever
- * needs to be api/local/auto, never a free pick of which CLI.
+ * needs to be api/local/auto, never a free pick of which CLI. Partial
+ * because not every provider is guaranteed to have a local agent - an
+ * absent entry means that provider is always resolved via the API path,
+ * regardless of its stored backend choice (kept even though all four
+ * providers currently have one, since a future fifth provider might not).
  */
-export const LOGICAL_PROVIDER_LOCAL_AGENT: Record<ProviderId, CodingExecutorId> = {
+export const LOGICAL_PROVIDER_LOCAL_AGENT: Partial<Record<ProviderId, CodingExecutorId>> = {
   anthropic: 'claude-code-cli',
   openai: 'openai-codex-cli',
-  gemini: 'google-antigravity-cli'
+  gemini: 'google-antigravity-cli',
+  xai: 'grok-build-cli'
 }
 
 // Cached per app session - an 'auto' resolution would otherwise spawn a
@@ -114,6 +120,7 @@ export function createParticipantFactory(
   backendConfig: BackendConfig
 ): ((id: ProviderId, workingDirectory?: string) => Promise<CouncilParticipant>) & {
   prepare(ids: ProviderId[], workingDirectory?: string): Promise<CouncilParticipant[]>
+  prepareAvailable(workingDirectory?: string): Promise<CouncilParticipant[]>
 } {
   const buildProvider = createProviderFactory(secretStore, modelConfig)
 
@@ -124,6 +131,7 @@ export function createParticipantFactory(
   const build = async (id: ProviderId, workingDirectory?: string): Promise<CouncilParticipant> => {
     const choice = backendConfig.getBackend(id)
     const executorId = LOGICAL_PROVIDER_LOCAL_AGENT[id]
+    if (!executorId) return toApiCouncilParticipant(buildProvider(id))
     const executor = executors[executorId]
 
     const useLocal = async (): Promise<CouncilParticipant> =>
@@ -154,12 +162,12 @@ export function createParticipantFactory(
     const issues: string[] = []
     let needsGit = false
     for (const id of new Set(ids)) {
-      if (!Object.prototype.hasOwnProperty.call(LOGICAL_PROVIDER_LOCAL_AGENT, id)) { issues.push(`Unbekannter Anbieter: ${id}`); continue }
-      const choice = backendConfig.getBackend(id)
+      if (!Object.prototype.hasOwnProperty.call(PROVIDER_LABELS, id)) { issues.push(`Unbekannter Anbieter: ${id}`); continue }
+      const executorId = LOGICAL_PROVIDER_LOCAL_AGENT[id]
+      const choice = executorId ? backendConfig.getBackend(id) : 'api'
       let local = choice === 'local'
-      if (choice !== 'api') {
+      if (executorId && choice !== 'api') {
         try {
-          const executorId = LOGICAL_PROVIDER_LOCAL_AGENT[id]
           const availability = await executors[executorId].detect()
           detectCache.set(executorId, availability)
           local = choice === 'local' || (availability.installed && availability.authStatus !== 'unauthenticated')
@@ -186,5 +194,24 @@ export function createParticipantFactory(
     applicationRuns.assertRunning()
     return participants
   }
-  return Object.assign(build, { prepare })
+  // Final review / replanning have no UI provider picker - they must use
+  // whoever is actually configured, including Grok, and must not fail the
+  // whole council just because one of the four seats is missing.
+  const prepareAvailable = async (workingDirectory?: string): Promise<CouncilParticipant[]> => {
+    const ids = Object.keys(PROVIDER_LABELS) as ProviderId[]
+    const settled = await Promise.all(ids.map(async (id) => {
+      try {
+        const [participant] = await prepare([id], workingDirectory)
+        return participant
+      } catch {
+        return undefined
+      }
+    }))
+    const providers = settled.filter((participant): participant is CouncilParticipant => !!participant)
+    if (!providers.length) {
+      throw new PreflightError(['Kein Council-Teilnehmer verfügbar. Anbieter in den Einstellungen einrichten oder anmelden.'])
+    }
+    return providers
+  }
+  return Object.assign(build, { prepare, prepareAvailable })
 }

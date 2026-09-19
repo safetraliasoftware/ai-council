@@ -8,8 +8,9 @@ import type { CouncilRunEvent, CouncilStage } from '@ai-council/council-core'
 import type { AttachedArtifact, SettingsState } from '../../../main/ipc-types'
 import AttachmentPicker from '../AttachmentPicker'
 import CompanyTruthToggle from '../CompanyTruthToggle'
+import { createRunEventGate } from '../runEventGate'
 
-const ALL_PROVIDERS: ProviderId[] = ['anthropic', 'openai', 'gemini']
+const ALL_PROVIDERS: ProviderId[] = ['anthropic', 'openai', 'gemini', 'xai']
 const STAGE_TITLE_KEYS: Record<CouncilStage, string> = {
   independent: 'taskCouncil.stageIndependent',
   critique: 'taskCouncil.stageCritique',
@@ -48,15 +49,17 @@ export default function TaskCouncil({ settings }: { settings: SettingsState }): 
     synthesis: {}
   })
   const [startError, setStartError] = useState('')
-  const currentRunId = useRef<string>('')
+  const gate = useRef(createRunEventGate()).current
+  const applyEvent = useRef<(e: CouncilRunEvent) => void>(() => {})
 
   useEffect(() => {
-    const off = window.api.task.onEvent((e: CouncilRunEvent) => {
+    const apply = (e: CouncilRunEvent): void => {
       if (e.kind === 'run_done') {
-        if (e.runId === currentRunId.current) { setRunning(false); setUsage(e.usage ?? []) }
+        setRunning(false)
+        setUsage(e.usage ?? [])
         return
       }
-      if (e.runId !== currentRunId.current || !e.stage) return
+      if (!e.stage) return
       const stage = e.stage
       const { providerId, event, label } = e
       setStages((s) => {
@@ -84,9 +87,14 @@ export default function TaskCouncil({ settings }: { settings: SettingsState }): 
         }
         return { ...s, [stage]: { ...stageState, [providerId]: next } }
       })
+    }
+    applyEvent.current = apply
+    const off = window.api.task.onEvent((raw: CouncilRunEvent) => {
+      const e = gate.take(raw)
+      if (e) apply(e)
     })
     return off
-  }, [])
+  }, [gate])
 
   const toggle = (p: ProviderId): void => {
     setSelected((s) => (s.includes(p) ? s.filter((x) => x !== p) : [...s, p]))
@@ -100,6 +108,7 @@ export default function TaskCouncil({ settings }: { settings: SettingsState }): 
     setUsage([])
     setStartError('')
     setStages({ independent: {}, critique: {}, revision: {}, synthesis: {} })
+    gate.begin()
     const { runId, error } = await window.api.task.runCouncil({
       prompt,
       providers: selected,
@@ -107,15 +116,16 @@ export default function TaskCouncil({ settings }: { settings: SettingsState }): 
       attachments
     })
     if (!runId) {
+      gate.fail()
       setRunning(false)
       setStartError(error ?? t('taskCouncil.startFailed'))
       return
     }
-    currentRunId.current = runId
+    for (const e of gate.commit(runId)) applyEvent.current(e)
   }
 
   const cancel = async (): Promise<void> => {
-    if (currentRunId.current) await window.api.task.cancel(currentRunId.current)
+    if (gate.id) await window.api.task.cancel(gate.id)
     setRunning(false)
   }
 

@@ -74,11 +74,15 @@
     "notInstalled": "nicht installiert",
     "allowFallback": "Bei \"Automatisch\": falls kein lokaler Agent verfügbar ist, auf die kostenpflichtige API ausweichen",
     "localAgentsHeading": "Lokale KI-Agenten einrichten",
-    "localAgentsIntro": "Installation und Anmeldung laufen außerhalb dieser App über die offizielle Anleitung des jeweiligen Anbieters – der erkannte Status hier aktualisiert sich automatisch, sobald die CLI verfügbar und angemeldet ist.",
+    "localAgentsIntro": "Installation und Anmeldung lassen sich unten direkt anstoßen - dabei öffnet sich ein Terminal-Fenster mit dem offiziellen Befehl des jeweiligen Anbieters, den Rest (Installation bzw. Browser-Login) schließt du dort selbst ab. Der erkannte Status hier aktualisiert sich automatisch, sobald die CLI verfügbar und angemeldet ist.",
     "officialGuide": "Offizielle Anleitung",
     "installedAuth": "installiert (Auth: {{status}})",
     "notFound": "nicht gefunden",
     "checking": "prüfe…",
+    "installButton": "Installieren",
+    "loginButton": "Anmelden",
+    "installLoginHint": "Terminal geöffnet - nach Abschluss aktualisiert sich der Status hier automatisch, sobald das Fenster wieder verlassen wird.",
+    "installLoginFailed": "Terminal konnte nicht geöffnet werden: {{error}}",
     "workspaceHeading": "Werkstatt-Ordner",
     "workspaceIntro": "Ein gemeinsamer Ordner für neue Projekte. Wird hier einmalig als Git-Repository eingerichtet; jedes neue Projekt legt sich danach als eigener Unterordner darin an, ohne dass \"innerhalb eines anderen Git-Projekts\" abgelehnt zu werden. Bereits bestehende, eigene Git-Projekte anderswo bleiben davon unberührt.",
     "workspaceCurrentlySetup": "Aktuell eingerichtet: {{path}}",
@@ -114,6 +118,7 @@
     "notReported": "Nicht gemeldet"
   },
   "codingEventDisplay": {
+    "statusStarting": "Wird gestartet…",
     "statusInit": "Sitzung gestartet",
     "statusThinkingTokens": "denkt nach…",
     "statusApiRetry": "Verbindung wird erneut versucht…",
@@ -269,7 +274,10 @@
     "attachDiff": "Diff anhängen",
     "back": "Zurück",
     "noHistory": "Kein Verlauf vorhanden.",
-    "diffCaptureFailed": "Diff konnte nicht erfasst werden."
+    "diffCaptureFailed": "Diff konnte nicht erfasst werden.",
+    "tooManyFiles": "Höchstens {{max}} Dateianhänge.",
+    "pdfChip": "PDF: {{name}}",
+    "imageChip": "Bild: {{name}}"
   },
   "changeRequests": {
     "statusPending": "Wartet auf Vorschlag",
@@ -400,7 +408,7 @@
   },
   "taskCoding": {
     "fallbackPointTitle": "Punkt {{n}}",
-    "description": "Führt die echte, lokal installierte CLI aus (Claude Code, OpenAI Codex oder Gemini/Antigravity) und nutzt dabei deine eigene Anmeldung/Abo dieses Tools – kein separater API-Key, keine zusätzliche Abrechnung über den Council.",
+    "description": "Führt die echte, lokal installierte CLI aus (Claude Code, OpenAI Codex, Gemini/Antigravity oder Grok Build) und nutzt dabei deine eigene Anmeldung/Abo dieses Tools – kein separater API-Key, keine zusätzliche Abrechnung über den Council.",
     "closeHistory": "Verlauf schließen",
     "history": "Verlauf",
     "loading": "Lädt…",
@@ -520,7 +528,7 @@
     "providerSetupIntro4": "(nutzt den lokalen Agenten, falls verfügbar; weicht nur auf die kostenpflichtige API aus, wenn du das per Häkchen ausdrücklich erlaubt hast).",
     "apiKeyTestIntro": "Für einen API-Key gibt es keine Format-Prüfung - füge ihn einfach ein und klicke auf",
     "apiKeyTestOutro": ", das ist die einzige echte Verifikation.",
-    "localAgentAuthIntro": "Bei den lokalen Agenten zeigt die App den erkannten Anmeldestatus an. Bei Claude Code ist das eine echte Prüfung (angemeldet ja/nein). Bei Codex und Antigravity zeigt die Anmeldung immer",
+    "localAgentAuthIntro": "Bei den lokalen Agenten zeigt die App den erkannten Anmeldestatus an. Bei Claude Code und Grok Build ist das eine echte Prüfung (angemeldet ja/nein). Bei Codex und Antigravity zeigt die Anmeldung immer",
     "localAgentAuthOutro": "an, sobald die CLI gefunden wurde - das ist normal und kein Fehler: beide CLIs bieten (Stand jetzt) keine Möglichkeit, den Anmeldestatus ohne echten Lauf abzufragen.",
     "workflowDetailHeading": "Der Workflow-Tab im Detail",
     "workflowIntro": "Bevor irgendetwas ausgeführt wird, muss eine Spezifikation freigegeben werden. Ein vom Council erstellter Taskgraph zerlegt das Ziel in einzelne Tasks. Jeder Task läuft in einem eigenen, isolierten Arbeitsbereich (eigener Git-Worktree) - Implementer und Reviewer (optional auch ein Challenger) prüfen unabhängig voneinander, bevor etwas ins Projekt übernommen wird.",
@@ -555,5 +563,10 @@
     "supportHeading": "Support",
     "supportIntro": "Frage oder Problem? Schreib mir direkt.",
     "contactSupport": "Support kontaktieren"
+  },
+  "onboarding": {
+    "welcomeHeading": "Willkommen bei AI Council",
+    "welcomeIntro": "Richte hier mindestens einen Anbieter ein, um loszulegen: entweder mit einem eigenen API-Key, oder über einen der unterstützten KI-Agenten (Claude Code, Codex, Antigravity, Grok Build) - Installation und Anmeldung lassen sich unten direkt anstoßen, öffnen dafür ein Terminal-Fenster, das du selbst zu Ende führst. Alles hier lässt sich jederzeit später in den Einstellungen ändern.",
+    "continueButton": "Weiter zur App"
   }
 }

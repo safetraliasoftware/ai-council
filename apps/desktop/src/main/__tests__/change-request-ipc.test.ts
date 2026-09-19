@@ -32,6 +32,14 @@ it('does not change a valid link that execution may already be consuming', async
   expect(await link(2)).toMatchObject({ ok: false })
   expect(mock.append).not.toHaveBeenCalled()
 })
+it('rejects an already-applied ChangeRequest instead of flipping it to rejected', async () => {
+  mock.requests[0].appliedAt = 1
+  mock.requests[0].status = 'human_approved'
+  const result = await mock.handlers.get('changeRequest:reject')!(null, { projectId: 'p', id: 'cr' })
+  expect(result).toMatchObject({ ok: false })
+  expect(mock.append).not.toHaveBeenCalled()
+})
+
 it('does not change an applied request even if its specification is now superseded', async () => {
   mock.requests[0].appliedAt = 1
   mock.requests[0].resultingSpecVersion = 1

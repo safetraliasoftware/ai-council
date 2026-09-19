@@ -74,11 +74,15 @@
     "notInstalled": "no instalado",
     "allowFallback": "Con «Automático»: recurrir a la API de pago si no hay ningún agente local disponible",
     "localAgentsHeading": "Configurar agentes de IA locales",
-    "localAgentsIntro": "La instalación y el inicio de sesión se realizan fuera de esta app, mediante la guía oficial del proveedor correspondiente — el estado detectado aquí se actualiza automáticamente en cuanto la CLI esté disponible y con la sesión iniciada.",
+    "localAgentsIntro": "La instalación y el inicio de sesión se pueden iniciar directamente aquí abajo - esto abre una ventana de terminal con el comando oficial del proveedor; el resto (instalación o inicio de sesión en el navegador) lo completas tú mismo ahí. El estado detectado aquí se actualiza automáticamente en cuanto la CLI esté disponible y con la sesión iniciada.",
     "officialGuide": "Guía oficial",
     "installedAuth": "instalado (autenticación: {{status}})",
     "notFound": "no encontrado",
     "checking": "comprobando…",
+    "installButton": "Instalar",
+    "loginButton": "Iniciar sesión",
+    "installLoginHint": "Terminal abierta - el estado aquí se actualiza automáticamente en cuanto vuelvas aquí tras terminar.",
+    "installLoginFailed": "No se pudo abrir una terminal: {{error}}",
     "workspaceHeading": "Carpeta de taller",
     "workspaceIntro": "Una carpeta compartida para proyectos nuevos. Se configura aquí una sola vez como repositorio Git; cada proyecto nuevo se crea después como una subcarpeta propia dentro de ella, sin ser rechazado por estar «dentro de otro proyecto Git». Los proyectos Git ya existentes y separados en otros lugares no se ven afectados.",
     "workspaceCurrentlySetup": "Configurado actualmente: {{path}}",
@@ -114,6 +118,7 @@
     "notReported": "No reportado"
   },
   "codingEventDisplay": {
+    "statusStarting": "Iniciando…",
     "statusInit": "Sesión iniciada",
     "statusThinkingTokens": "pensando…",
     "statusApiRetry": "Reintentando conexión…",
@@ -269,7 +274,10 @@
     "attachDiff": "Adjuntar diff",
     "back": "Atrás",
     "noHistory": "No hay historial disponible.",
-    "diffCaptureFailed": "No se pudo capturar el diff."
+    "diffCaptureFailed": "No se pudo capturar el diff.",
+    "tooManyFiles": "Como máximo {{max}} archivos adjuntos.",
+    "pdfChip": "PDF: {{name}}",
+    "imageChip": "Imagen: {{name}}"
   },
   "changeRequests": {
     "statusPending": "Esperando propuesta",
@@ -400,7 +408,7 @@
   },
   "taskCoding": {
     "fallbackPointTitle": "Punto {{n}}",
-    "description": "Ejecuta la CLI real instalada localmente (Claude Code, OpenAI Codex o Gemini/Antigravity) usando tu propio inicio de sesión/suscripción de esa herramienta – sin clave API separada, sin facturación adicional a través del council.",
+    "description": "Ejecuta la CLI real instalada localmente (Claude Code, OpenAI Codex, Gemini/Antigravity o Grok Build) usando tu propio inicio de sesión/suscripción de esa herramienta – sin clave API separada, sin facturación adicional a través del council.",
     "closeHistory": "Cerrar historial",
     "history": "Historial",
     "loading": "Cargando…",
@@ -520,7 +528,7 @@
     "providerSetupIntro4": "(usa el agente local si está disponible; solo recurre a la API de pago si lo has permitido explícitamente con la casilla).",
     "apiKeyTestIntro": "No hay verificación de formato para una clave API - simplemente pégala y haz clic en",
     "apiKeyTestOutro": ", esa es la única verificación real.",
-    "localAgentAuthIntro": "En los agentes locales, la app muestra el estado de inicio de sesión detectado. En Claude Code es una comprobación real (con sesión iniciada sí/no). En Codex y Antigravity, el estado de inicio de sesión siempre muestra",
+    "localAgentAuthIntro": "En los agentes locales, la app muestra el estado de inicio de sesión detectado. En Claude Code y Grok Build es una comprobación real (con sesión iniciada sí/no). En Codex y Antigravity, el estado de inicio de sesión siempre muestra",
     "localAgentAuthOutro": "en cuanto se encuentra la CLI - esto es normal y no un error: por ahora, ninguna de las dos CLI ofrece una forma de consultar el estado de inicio de sesión sin una ejecución real.",
     "workflowDetailHeading": "La pestaña Workflow en detalle",
     "workflowIntro": "Antes de ejecutar nada, se debe aprobar una especificación. Un grafo de tareas creado por el council descompone el objetivo en tareas individuales. Cada tarea se ejecuta en su propio espacio de trabajo aislado (su propio worktree de Git) - implementer y reviewer (opcionalmente también un challenger) verifican de forma independiente antes de integrar algo al proyecto.",
@@ -555,5 +563,10 @@
     "supportHeading": "Soporte",
     "supportIntro": "¿Pregunta o problema? Escríbeme directamente.",
     "contactSupport": "Contactar con soporte"
+  },
+  "onboarding": {
+    "welcomeHeading": "Bienvenido a AI Council",
+    "welcomeIntro": "Configura aquí al menos un proveedor para empezar: ya sea con tu propia clave API, o mediante uno de los agentes de IA compatibles (Claude Code, Codex, Antigravity, Grok Build) - la instalación y el inicio de sesión se pueden iniciar directamente aquí abajo, lo que abre una ventana de terminal que completas tú mismo. Todo esto se puede cambiar más adelante en los ajustes, en cualquier momento.",
+    "continueButton": "Continuar a la aplicación"
   }
 }

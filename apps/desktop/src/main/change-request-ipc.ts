@@ -206,6 +206,9 @@ export function registerChangeRequestIpcHandlers(
     action(async () => {
       if (evaluatingIds.has(requestKey(req.projectId, req.id))) throw new Error('Die Rat-Bewertung läuft noch.')
       const cr = replayChangeRequests(req.projectId).find((r) => r.id === req.id)
+      if (!cr || (cr.status !== 'pending' && cr.status !== 'council_approved') || cr.appliedAt) {
+        throw new Error('Diese Änderungsanfrage kann nicht abgelehnt werden.')
+      }
       await appendEvent(req.projectId, { projectId: req.projectId, type: 'ChangeRequestRejected', timestamp: Date.now(), payload: { id: req.id } })
       // Rejecting the CR means "no spec change needed" - but the escalated
       // attempt that raised it is still sitting there. 'escalated' is

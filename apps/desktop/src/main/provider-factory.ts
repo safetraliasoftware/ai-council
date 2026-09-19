@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { AIProvider, ProviderId } from '@ai-council/shared'
-import { AnthropicProvider, OpenAIProvider, GeminiProvider } from '@ai-council/providers'
+import { AnthropicProvider, OpenAIProvider, GeminiProvider, XAIProvider } from '@ai-council/providers'
 import type { ElectronSecretStore } from './secret-store'
 import type { ModelConfig } from './model-config'
 
@@ -44,6 +44,8 @@ export function createProviderFactory(
         return new OpenAIProvider({ apiKey, model })
       case 'gemini':
         return new GeminiProvider({ apiKey, model })
+      case 'xai':
+        return new XAIProvider({ apiKey, model })
     }
   }
 }

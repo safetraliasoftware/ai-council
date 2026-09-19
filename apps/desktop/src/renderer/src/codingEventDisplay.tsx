@@ -5,6 +5,7 @@ import type { CodingLogEntry } from '../../main/ipc-types'
 /** Shared between TaskCoding and TaskWorkflow - same event vocabulary, same display rules. */
 
 export const STATUS_KEYS: Record<string, string> = {
+  ui_task_starting: 'codingEventDisplay.statusStarting',
   init: 'codingEventDisplay.statusInit',
   thinking_tokens: 'codingEventDisplay.statusThinkingTokens',
   api_retry: 'codingEventDisplay.statusApiRetry',
@@ -30,7 +31,11 @@ export type LogEntry = CodingLogEntry
 export function applyCodingEvent(prev: LogEntry[], event: CodingExecutorEvent): LogEntry[] {
   switch (event.type) {
     case 'start':
-      return prev
+      // A resumed session with a real CLI (Grok Build, live-verified) can take
+      // 10-15+ seconds before it emits its own first event, growing with
+      // conversation depth - with nothing shown here in the meantime, that
+      // reads as "nothing happened" rather than "working, please wait."
+      return [...prev, { kind: 'status', message: 'ui_task_starting', count: 1 }]
     case 'text': {
       const last = prev[prev.length - 1]
       if (last?.kind === 'text') {

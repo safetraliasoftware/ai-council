@@ -8,6 +8,7 @@ import type {
   ProviderCapabilities,
   ProviderEvent
 } from '@ai-council/shared'
+import { requestText, toAnthropicUserContent, UnsupportedInputFileError } from './input-files'
 
 export interface AnthropicProviderConfig {
   apiKey: string
@@ -40,7 +41,7 @@ export class AnthropicProvider implements AIProvider {
   }
 
   capabilities(): ProviderCapabilities {
-    return { streaming: true, tools: false, vision: false }
+    return { streaming: true, tools: false, vision: true }
   }
 
   async *generate(request: CouncilRequest, options?: GenerateOptions): AsyncIterable<ProviderEvent> {
@@ -48,6 +49,9 @@ export class AnthropicProvider implements AIProvider {
     yield { type: 'start', runId }
 
     try {
+      const files = request.inputFiles ?? []
+      const text = requestText(request.messages)
+      const userContent = files.length > 0 ? await toAnthropicUserContent(text, files) : text
       const stream = this.client.messages.stream(
         {
           model: this.config.model,
@@ -57,7 +61,7 @@ export class AnthropicProvider implements AIProvider {
           // types don't yet model `{type: "adaptive"}` explicitly, so this
           // avoids fighting a type-definition lag rather than the live API.
           ...(request.systemInstructions ? { system: request.systemInstructions } : {}),
-          messages: request.messages.map((m) => ({ role: m.role, content: m.content }))
+          messages: [{ role: 'user', content: userContent }]
         },
         { signal: options?.signal }
       )
@@ -93,6 +97,10 @@ export class AnthropicProvider implements AIProvider {
       }
       yield { type: 'done', result: { text: fullText } }
     } catch (err) {
+      if (err instanceof UnsupportedInputFileError) {
+        yield { type: 'error', error: { providerId: 'anthropic', code: 'invalid_request', message: err.message, retryable: false } }
+        return
+      }
       yield { type: 'error', error: mapError(err) }
     }
   }

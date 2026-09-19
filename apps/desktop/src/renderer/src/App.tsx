@@ -9,6 +9,7 @@ import TaskCoding from './components/TaskCoding'
 import ProjectSpec, { type ProjectSpecPrefill } from './components/ProjectSpec'
 import UsageHistory from './components/UsageHistory'
 import Help from './components/Help'
+import Onboarding from './components/Onboarding'
 
 type Tab = 'parallel' | 'team' | 'council' | 'coding' | 'projectSpec' | 'settings' | 'usage' | 'help'
 
@@ -17,6 +18,7 @@ export default function App(): React.JSX.Element {
   const [tab, setTab] = useState<Tab>('parallel')
   const [settings, setSettings] = useState<SettingsState | null>(null)
   const [projectSpecPrefill, setProjectSpecPrefill] = useState<ProjectSpecPrefill | null>(null)
+  const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState<boolean | null>(null)
 
   const reloadSettings = async (): Promise<void> => {
     setSettings(await window.api.settings.get())
@@ -24,6 +26,7 @@ export default function App(): React.JSX.Element {
 
   useEffect(() => {
     reloadSettings()
+    window.api.settings.getHasCompletedOnboarding().then(setHasCompletedOnboarding)
     const openSettings = () => setTab('settings')
     window.addEventListener('ai-council:open-settings', openSettings)
     return () => window.removeEventListener('ai-council:open-settings', openSettings)
@@ -45,6 +48,18 @@ export default function App(): React.JSX.Element {
   const anyKeyMissing = settings
     ? Object.values(settings).some((s) => s.backend === 'api' && !s.hasKey)
     : false
+
+  if (settings === null || hasCompletedOnboarding === null) return <></>
+
+  if (!hasCompletedOnboarding) {
+    return (
+      <Onboarding
+        settings={settings}
+        onSettingsChange={reloadSettings}
+        onComplete={() => setHasCompletedOnboarding(true)}
+      />
+    )
+  }
 
   return (
     <div className="app">

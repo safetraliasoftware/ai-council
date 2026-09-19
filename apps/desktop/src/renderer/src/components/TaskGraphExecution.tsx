@@ -10,7 +10,7 @@ import type { CodingExecutorId, RespondInstallRequestDto, WorktreeActionResult }
 import { CODING_EXECUTOR_LABELS } from '../../../main/ipc-types'
 import ChangeRequests from './ChangeRequests'
 
-const EXECUTORS: CodingExecutorId[] = ['claude-code-cli', 'openai-codex-cli', 'google-antigravity-cli']
+const EXECUTORS: CodingExecutorId[] = ['claude-code-cli', 'openai-codex-cli', 'google-antigravity-cli', 'grok-build-cli']
 const PHASE_KEYS: Record<ProjectExecution['phase'], string> = {
   planning: 'taskGraphExecution.phasePlanning', execution: 'taskGraphExecution.phaseExecution', integration_review: 'taskGraphExecution.phaseIntegrationReview',
   release_approval: 'taskGraphExecution.phaseReleaseApproval', done: 'taskGraphExecution.phaseDone', halted: 'taskGraphExecution.phaseHalted'
@@ -233,7 +233,7 @@ export default function TaskGraphExecution({ projectId, taskGraph, onChanged, on
           Caught live: a task stayed stuck at "Architekturentscheidung
           erforderlich" with no visible way forward at all.
         */}
-        {latest && ['review', 'failed', 'interrupted', 'escalated'].includes(latest.status) && <button disabled={busy || running} onClick={() => void act(() => window.api.taskGraph.discardTask({ projectId, taskId: task.id }))}>{t('taskGraphExecution.discardAttempt')}</button>}
+        {latest && ['review', 'failed', 'interrupted', 'escalated', 'paused'].includes(latest.status) && <button disabled={busy || running} onClick={() => void act(() => window.api.taskGraph.discardTask({ projectId, taskId: task.id }))}>{t('taskGraphExecution.discardAttempt')}</button>}
         {attempts.map(attempt => <details key={attempt.id} ref={el => { if (el) attemptRefs.current.set(attempt.id, el) }}><summary>{t('taskGraphExecution.attemptSummary', { id: attempt.id.slice(0, 8), status: t(STATUS_KEYS[attempt.status]) })}</summary>
           <p>{attempt.implementerId} → {attempt.reviewerId}{attempt.challengerId ? ` → ${attempt.challengerId}` : ''}</p>
           {attempt.verification.map((v, i) => <details key={i}><summary>{v.success ? '✓' : '✕'} {v.command.executable} {v.command.args.join(' ')} · {t('taskGraphExecution.exitLabel', { code: v.exitCode ?? '–' })} · {v.durationMs} ms</summary><pre>{v.stdout}{v.stderr}</pre></details>)}

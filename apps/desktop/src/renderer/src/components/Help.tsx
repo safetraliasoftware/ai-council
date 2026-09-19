@@ -4,7 +4,7 @@ import type { ProviderId } from '@ai-council/shared'
 import { PROVIDER_LABELS } from '@ai-council/shared'
 import { LOCAL_AGENT_DOCS, LOCAL_AGENT_LABEL } from './Settings'
 
-const PROVIDERS: ProviderId[] = ['anthropic', 'openai', 'gemini']
+const PROVIDERS: ProviderId[] = ['anthropic', 'openai', 'gemini', 'xai']
 
 export default function Help(): React.JSX.Element {
   const { t } = useTranslation()
@@ -48,7 +48,9 @@ export default function Help(): React.JSX.Element {
         <strong> "unknown"</strong> {t('help.localAgentAuthOutro')}
       </p>
       {PROVIDERS.map((provider) => {
-        const info = LOCAL_AGENT_DOCS[provider]
+        // PROVIDERS here is deliberately just the providers with a local
+        // CLI agent - all four currently qualify, always defined.
+        const info = LOCAL_AGENT_DOCS[provider]!
         return (
           <div key={provider} className="row" style={{ justifyContent: 'space-between', marginBottom: 6 }}>
             <div>

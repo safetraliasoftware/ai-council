@@ -16,6 +16,7 @@ import type {
   WorkflowRunRecord
 } from './ipc-types'
 import { appendRun, getRun, listRuns, getWorkflowWorktree } from './run-history-store'
+import { installExecutor, loginExecutor } from './local-agent-setup'
 import { WorktreeStore } from './worktree-store'
 import { applicationRuns } from '../services/run-lifecycle'
 import { executionPreflight } from './preflight'
@@ -57,6 +58,14 @@ export function registerCodingIpcHandlers(
       const entries = await Promise.all(ids.map(async (id) => [id, await executors[id].detect()] as const))
       return Object.fromEntries(entries) as Record<CodingExecutorId, ExecutorAvailability>
     }
+  )
+
+  ipcMain.handle('coding:installExecutor', (_e, executorId: CodingExecutorId): { ok: boolean; error?: string } =>
+    installExecutor(executorId)
+  )
+
+  ipcMain.handle('coding:loginExecutor', (_e, executorId: CodingExecutorId): { ok: boolean; error?: string } =>
+    loginExecutor(executorId)
   )
 
   ipcMain.handle('coding:pickDirectory', async (): Promise<string | undefined> => {
@@ -130,7 +139,7 @@ export function registerCodingIpcHandlers(
       if (req.sessionId && !executor.resumeSession) throw new Error('Dieser Agent unterstützt keine Sitzungsfortsetzung.')
       await executionPreflight(req.workingDirectory, [], [executor], false, req.permissionTier !== 'read-only')
       applicationRuns.assertRunning()
-      const providerIds: Record<CodingExecutorId, ProviderId> = { 'claude-code-cli': 'anthropic', 'openai-codex-cli': 'openai', 'google-antigravity-cli': 'gemini' }
+      const providerIds: Record<CodingExecutorId, ProviderId> = { 'claude-code-cli': 'anthropic', 'openai-codex-cli': 'openai', 'google-antigravity-cli': 'gemini', 'grok-build-cli': 'xai' }
       usage = { runId: randomUUID(), kind: 'coding', workingDirectory: req.workingDirectory, startedAt: Date.now(), status: 'running', calls: [{
         providerId: providerIds[req.executorId], backend: 'local_agent', inputChars: req.prompt.length, outputChars: 0, durationMs: 0, outcome: 'running'
       }] }

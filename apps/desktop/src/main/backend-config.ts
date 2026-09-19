@@ -18,7 +18,8 @@ interface BackendConfigFile {
 const DEFAULT_BACKENDS: Record<ProviderId, ParticipantBackendChoice> = {
   anthropic: 'auto',
   openai: 'auto',
-  gemini: 'auto'
+  gemini: 'auto',
+  xai: 'auto'
 }
 
 /**

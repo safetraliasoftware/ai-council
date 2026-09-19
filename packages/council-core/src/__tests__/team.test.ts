@@ -87,4 +87,29 @@ describe('runTeam', () => {
     expect(geminiRan).toBe(false)
     expect(events.at(-1)).toMatchObject({ kind: 'run_done', runId: run.runId })
   })
+
+  it('attaches inputFiles to every step, including later ones', async () => {
+    const seen: string[][] = []
+    const capture = (id: ProviderId, reply: string): CouncilParticipant => ({
+      id,
+      backend: 'api',
+      capabilities: () => ({ streaming: true, tools: false, vision: true }),
+      async *generate(request: CouncilRequest): AsyncIterable<CouncilParticipantEvent> {
+        seen.push((request.inputFiles ?? []).map((f) => f.path))
+        yield { type: 'start', runId: 'mock-run' }
+        yield { type: 'done', result: { text: reply } }
+      }
+    })
+    const files = [{ filename: 'a.png', mimeType: 'image/png', path: '/tmp/a.png' }]
+    for await (const _ of runTeam(
+      [
+        { provider: capture('anthropic', 'draft'), roleInstruction: 'Draft it.' },
+        { provider: capture('gemini', 'refined'), roleInstruction: 'Refine it.' }
+      ],
+      'initial task',
+      undefined,
+      files
+    ).events) { /* drain */ }
+    expect(seen).toEqual([['/tmp/a.png'], ['/tmp/a.png']])
+  })
 })

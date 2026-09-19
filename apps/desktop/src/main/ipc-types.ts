@@ -27,18 +27,23 @@ export interface TestKeyResult {
   error?: string
 }
 
+export const MAX_FILE_ATTACHMENTS = 6
+export const MAX_FILE_BYTES = 10 * 1024 * 1024
+
 /**
- * A real piece of evidence (a git diff, a file's content, a past Coding/
- * Workflow run) attached to a Vergleichen/Team/Council request. Folded
- * into the plain-string prompt right before it reaches council-core (see
- * ipc.ts's withAttachments) - council-core's AIProvider/CouncilRequest
- * contract stays untouched (content is and remains a plain string), so
- * this is purely a renderer/IPC-layer concern, not a new capability
- * council-core needs to know about.
+ * Evidence attached to Vergleichen/Team/Council. Inline text (git diffs,
+ * history, UTF-8 files) is folded into the prompt string. Binary files
+ * (images, PDFs) keep only a path the main process re-reads at send time
+ * and pass as CouncilRequest.inputFiles — the renderer never holds bytes.
  */
 export interface AttachedArtifact {
   label: string
-  text: string
+  kind?: 'inline-text' | 'file'
+  text?: string
+  path?: string
+  mimeType?: string
+  filename?: string
+  byteLength?: number
 }
 
 export interface ParallelRunRequestDto {
@@ -78,12 +83,13 @@ export interface CaptureDiffResult {
  * executor is a different kind of thing (agentic runtime with filesystem
  * access) and its wiring must not get entangled with the Council API's.
  */
-export type CodingExecutorId = 'claude-code-cli' | 'openai-codex-cli' | 'google-antigravity-cli'
+export type CodingExecutorId = 'claude-code-cli' | 'openai-codex-cli' | 'google-antigravity-cli' | 'grok-build-cli'
 
 export const CODING_EXECUTOR_LABELS: Record<CodingExecutorId, string> = {
   'claude-code-cli': 'Claude Code',
   'openai-codex-cli': 'OpenAI Codex',
-  'google-antigravity-cli': 'Gemini (Antigravity)'
+  'google-antigravity-cli': 'Gemini (Antigravity)',
+  'grok-build-cli': 'Grok Build'
 }
 
 export interface CodingDetectResult {

@@ -1,5 +1,5 @@
 import { mkdir } from 'node:fs/promises'
-import type { CouncilParticipant, CouncilParticipantEvent, ProviderId } from '@ai-council/shared'
+import type { CouncilParticipant, CouncilParticipantEvent, InputFile, ProviderId } from '@ai-council/shared'
 import type { CodingExecutor, CodingExecutorEvent } from '@ai-council/coding'
 import { isGitRepo, snapshotWorkspace, verifyWorkspaceUnchanged } from '@ai-council/coding'
 
@@ -65,10 +65,18 @@ function mapExecutorEvent(
  * (never mutate the repo) - both tool names are confirmed real by Claude
  * Code's own denial messages, not guessed. `allowedTools` is a documented
  * Claude-Code-specific override (packages/coding's CodingTaskSpec) that
- * Codex/Antigravity both ignore entirely, so this is a no-op for them, not
- * a behavior change.
+ * Codex/Antigravity/Grok Build all ignore entirely, so this is a no-op for
+ * them, not a behavior change - Grok Build derives its own read-only tool
+ * list from permissionTier alone (see grok-build-cli.ts's
+ * ALLOWED_TOOLS_BY_TIER), the same way Codex/Antigravity do.
  */
 const COUNCIL_READONLY_TOOLS = ['Read', 'Glob', 'Grep', 'WebSearch', 'WebFetch']
+
+export function appendInputFileInstructions(prompt: string, files: InputFile[] | undefined): string {
+  if (!files || files.length === 0) return prompt
+  const list = files.map((f) => `- ${f.path} (${f.filename}, ${f.mimeType})`).join('\n')
+  return `${prompt}\n\nAngehängte Dateien — bitte mit deinen Lese-Werkzeugen öffnen und nicht verändern:\n${list}`
+}
 
 /**
  * Wraps a CodingExecutor as a read-only council participant - an already
@@ -102,13 +110,16 @@ export function toAgentCouncilParticipant(
   return {
     id: logicalProvider,
     backend: 'local_agent',
-    capabilities: () => ({ streaming: true, tools: false, vision: false }),
+    capabilities: () => ({ streaming: true, tools: false, vision: true }),
     async *generate(request, options): AsyncGenerator<CouncilParticipantEvent> {
       await mkdir(workingDirectory, { recursive: true })
 
-      const prompt = request.systemInstructions
-        ? `${request.systemInstructions}\n\n${request.messages.map((m) => m.content).join('\n\n')}`
-        : request.messages.map((m) => m.content).join('\n\n')
+      const prompt = appendInputFileInstructions(
+        request.systemInstructions
+          ? `${request.systemInstructions}\n\n${request.messages.map((m) => m.content).join('\n\n')}`
+          : request.messages.map((m) => m.content).join('\n\n'),
+        request.inputFiles
+      )
 
       const repoPresent = await isGitRepo(workingDirectory)
       const baseline = repoPresent ? await snapshotWorkspace(workingDirectory) : undefined

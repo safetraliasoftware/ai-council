@@ -2,6 +2,7 @@ import { ipcMain, app } from 'electron'
 import type { BrowserWindow } from 'electron'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
+import type { ProviderId } from '@ai-council/shared'
 import { ensureProjectRepository } from '@ai-council/coding'
 import type { CodingExecutor } from '@ai-council/coding'
 import type { CommandSpec, TaskBudget } from '@ai-council/project-domain'
@@ -18,7 +19,7 @@ import type { CodingExecutorId, RespondInstallRequestDto, RespondPermissionReque
 export function registerTaskGraphExecutionIpcHandlers(
   getWindow: () => BrowserWindow | null,
   executors: Record<CodingExecutorId, CodingExecutor>,
-  council: (prompt: string, signal: AbortSignal, chairId?: 'anthropic' | 'openai' | 'gemini', workingDirectory?: string, projectId?: string, kind?: 'final_review' | 'replanning') => Promise<string>
+  council: (prompt: string, signal: AbortSignal, chairId?: ProviderId, workingDirectory?: string, projectId?: string, kind?: 'final_review' | 'replanning') => Promise<string>
 ): ProjectEngine {
   const engine = new ProjectEngine({
     preflight: async (directory, commands, ids) => {

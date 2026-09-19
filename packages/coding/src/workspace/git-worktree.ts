@@ -138,7 +138,7 @@ export async function mergeWorktree(info: WorktreeInfo): Promise<void> {
   await gitOrThrow(['add', '-A'], info.path)
   const staged = await git(['diff', '--cached', '--quiet'], info.path)
   if (staged.exitCode !== 0) {
-    await gitOrThrow(['commit', '-m', `AI Council: ${info.branch}`], info.path)
+    await gitOrThrow(['-c', 'commit.gpgsign=false', 'commit', '-m', `AI Council: ${info.branch}`], info.path)
   }
   try {
     await gitOrThrow(['merge', '--no-edit', info.branch], info.sourceRepo)
