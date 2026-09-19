@@ -2,7 +2,7 @@
 
 Windows-Desktop-App zum gemeinsamen Beauftragen von **Claude**, **ChatGPT/Codex**, **Gemini** und **Grok** — als API-Teilnehmer und als lokal angemeldete CLI-Coding-Agenten.
 
-Aktuelle Version: **[0.1.3](https://github.com/safetraliasoftware/ai-council/releases/tag/v0.1.3)** · Oberfläche auf Deutsch, English, Français und Español · [Wiki](https://github.com/safetraliasoftware/ai-council/wiki)
+Aktuelle Version: **[0.1.4](https://github.com/safetraliasoftware/ai-council/releases/tag/v0.1.4)** · Oberfläche auf Deutsch, English, Français und Español · [Wiki](https://github.com/safetraliasoftware/ai-council/wiki)
 
 ## Download
 
@@ -10,8 +10,8 @@ Unter [Releases](https://github.com/safetraliasoftware/ai-council/releases/lates
 
 | Datei | Zweck |
 |---|---|
-| `AI-Council-Setup-0.1.3.exe` | Installer (Ordner wählbar) |
-| `AI-Council-0.1.3.exe` | Portable, ohne Installation |
+| `AI-Council-Setup-0.1.4.exe` | Installer (Ordner wählbar) |
+| `AI-Council-0.1.4.exe` | Portable, ohne Installation |
 
 Die App prüft beim Start automatisch auf neue Versionen und fragt vor der Installation nach. Windows 10 oder neuer.
 
