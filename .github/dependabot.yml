@@ -5,12 +5,9 @@ updates:
     schedule:
       interval: weekly
       day: monday
-    open-pull-requests-limit: 3
+    # 0 = no routine version-bump PRs. Security-update PRs still open
+    # when GitHub has a real advisory.
+    open-pull-requests-limit: 0
     ignore:
-      # Majors for these are product work, not drive-by PRs.
-      - dependency-name: electron
-        update-types: ["version-update:semver-major"]
-      - dependency-name: vitest
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "@vitest/mocker"
+      - dependency-name: "*"
         update-types: ["version-update:semver-major"]
