@@ -1,25 +1,36 @@
 # AI Council
 
-Desktop-App (Windows, Electron) zum gemeinsamen Beauftragen von Claude, ChatGPT/Codex, Gemini und Grok — sowohl als API-gestützte Diskussionsteilnehmer als auch als echte, lokal angemeldete CLI-Coding-Agenten in einer vollständigen Engineering-Pipeline: Spezifikation → Council → Taskgraph → Ausführung → Freigabe.
+Windows-Desktop-App zum gemeinsamen Beauftragen von **Claude**, **ChatGPT/Codex**, **Gemini** und **Grok** — als API-Teilnehmer und als lokal angemeldete CLI-Coding-Agenten.
+
+Aktuelle Version: **[0.1.3](https://github.com/safetraliasoftware/ai-council/releases/tag/v0.1.3)** · Oberfläche auf Deutsch, English, Français und Español · [Wiki](https://github.com/safetraliasoftware/ai-council/wiki)
 
 ## Download
 
-Fertige Installer gibt es unter [Releases](https://github.com/safetraliasoftware/ai-council/releases) — entweder als Setup-Installer oder als portable `.exe`. Die App sucht beim Start automatisch nach neuen Versionen.
+Unter [Releases](https://github.com/safetraliasoftware/ai-council/releases/latest):
 
-## Funktionen
+| Datei | Zweck |
+|---|---|
+| `AI-Council-Setup-0.1.3.exe` | Installer (Ordner wählbar) |
+| `AI-Council-0.1.3.exe` | Portable, ohne Installation |
 
-- **Vergleichen** — mehrere Antworten auf dieselbe Frage nebeneinander.
-- **Team** — mehrere Anbieter teilen sich eine Aufgabe, ein gemeinsames Ergebnis.
-- **Council** — mehrstufige Diskussion (unabhängige Antworten, Kritik, Synthese) für eine durchdachte Entscheidung.
-- **Coding** — ein einzelner Agent arbeitet direkt in einem gewählten Ordner.
-- **Workflow** — die eigentliche Engineering-Pipeline für echte Projekte: eine freigegebene Spezifikation wird vom Council in einen Taskgraph zerlegt, jeder Task läuft isoliert in einem eigenen Git-Worktree (Implementer + Reviewer, optional Challenger), inklusive Rechte-Eskalation, Korrektur-/Zeitbudget, Integration und menschlicher Freigabe.
-- **Verbrauch** — Nutzungsverlauf (Aufrufe, Dauer) über alle Läufe.
+Die App prüft beim Start automatisch auf neue Versionen und fragt vor der Installation nach. Windows 10 oder neuer.
 
-Eine ausführliche Erklärung aller Begriffe (Task-Status, Scopes, Einrichtung der einzelnen Agenten) gibt es direkt im **Hilfe**-Tab der App.
+## Was die App kann
+
+| Tab | Zweck |
+|---|---|
+| **Vergleichen** | Mehrere Antworten auf dieselbe Frage nebeneinander. |
+| **Team** | Mehrere Anbieter teilen sich eine Aufgabe in Schritten, ein gemeinsames Ergebnis. |
+| **Council** | Mehrstufige Diskussion: unabhängige Antworten, anonymisierte Kritik, Überarbeitung, Synthese. |
+| **Coding** | Ein einzelner lokal angemeldeter Agent arbeitet direkt in einem Ordner. |
+| **Workflow** | Engineering-Pipeline: Spezifikation → Council → Taskgraph → isolierte Ausführung → Freigabe. |
+| **Verbrauch** | Gemessene Aufrufe, Dauer und gemeldete Tokens/Kosten — kein Abo-Restkontingent. |
+
+Ausführliche Anleitungen stehen im **[Wiki](https://github.com/safetraliasoftware/ai-council/wiki)** und im Hilfe-Tab der App.
 
 ## Anbieter einrichten
 
-Pro Anbieter (Claude, ChatGPT, Gemini, Grok) lässt sich in den Einstellungen zwischen **API** (eigener API-Key), **lokal** (installierter CLI-Agent) und **Automatisch** wählen:
+Beim ersten Start führt die App durch die Einrichtung. Pro Anbieter lässt sich **API** (eigener Key), **lokal** (installierter CLI-Agent) oder **Automatisch** wählen.
 
 | Anbieter | Lokaler Agent | Offizielle Anleitung |
 |---|---|---|
@@ -28,7 +39,7 @@ Pro Anbieter (Claude, ChatGPT, Gemini, Grok) lässt sich in den Einstellungen zw
 | Gemini | Antigravity (`agy`) | https://antigravity.google/docs/cli/getting-started/ |
 | Grok | Grok Build (`grok`) | https://docs.x.ai/build/overview |
 
-Installation und Anmeldung der CLIs laufen jeweils über die offizielle Anleitung des Anbieters — AI Council erkennt den Status automatisch, sobald die CLI verfügbar ist.
+API-Keys bleiben verschlüsselt auf diesem Rechner (`safeStorage`) und verlassen den Hauptprozess nicht. Installation und Anmeldung der CLIs folgen der jeweiligen Herstelleranleitung — AI Council erkennt den Status, sobald die CLI verfügbar ist.
 
 ## Entwicklung
 
@@ -40,13 +51,17 @@ npm install
 
 | Befehl | Zweck |
 |---|---|
-| `npm run dev` | Electron-App im Entwicklungsmodus starten |
+| `npm run dev` | Electron-App im Entwicklungsmodus |
 | `npm run typecheck` | alle Workspaces typprüfen |
-| `npm test` | alle Testsuiten ausführen (dauert einige Minuten — echte Git-Worktrees/Prozesse, keine Mocks) |
+| `npm test` | alle Testsuiten (einige Minuten, echte Git-Worktrees/Prozesse) |
 | `npm run build` | Produktionsbuild der Desktop-App |
-| `npm run dist --workspace=@ai-council/desktop` | Installer/portable Build lokal erzeugen (ohne Veröffentlichung) |
+| `npm run dist --workspace=@ai-council/desktop` | Installer/portable lokal erzeugen (ohne Veröffentlichung) |
 
-Details zur Architektur (Paket-Schichtung, Ausführungsmodell, Konventionen) stehen in [`CLAUDE.md`](CLAUDE.md), der aktuelle Abgleich mit der Produktvision in [`docs/vision-gap-analysis.md`](docs/vision-gap-analysis.md).
+Architektur und Konventionen: [`CLAUDE.md`](CLAUDE.md) · Entwicklerhinweise auch im [Wiki](https://github.com/safetraliasoftware/ai-council/wiki/Entwicklung).
+
+## Support
+
+Fragen und Fehler: [info@safetralia.de](mailto:info@safetralia.de) · [Issues](https://github.com/safetraliasoftware/ai-council/issues)
 
 ## Lizenz
 

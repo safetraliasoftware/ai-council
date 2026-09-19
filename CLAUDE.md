@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-AI Council is an Electron/TypeScript desktop app for orchestrating Claude, Codex (ChatGPT) and Gemini both as API-based discussion participants (Council/Compare/Team) and as real, locally-authenticated CLI coding agents running a full "Spec → Council → TaskGraph → Execution → Release" engineering pipeline. See `docs/vision-gap-analysis.md` for the product vision, current gap analysis against it, and the milestone roadmap (M1–M6) — read this before proposing new architecture.
+AI Council is an Electron/TypeScript desktop app for orchestrating Claude, Codex (ChatGPT), Gemini and Grok both as API-based discussion participants (Council/Compare/Team) and as real, locally-authenticated CLI coding agents running a full "Spec → Council → TaskGraph → Execution → Release" engineering pipeline. See `docs/vision-gap-analysis.md` for the product vision, current gap analysis against it, and the milestone roadmap (M1–M6) — read this before proposing new architecture.
 
 ## Commands
 
@@ -64,7 +64,7 @@ When something needs to be shared between `coding` and a package that doesn't de
 
 **Two kinds of Council seat**: API-based (`packages/providers`, wraps the provider SDKs directly) and local-agent-based (`toAgentCouncilParticipant` in `packages/council-participants/src/agent-participant.ts`, wraps a `CodingExecutor` running read-only). `createParticipantFactory` (`apps/desktop/src/main/participant-factory.ts`) resolves a `'local' | 'api' | 'auto'` backend choice per provider, grounding local-agent seats in a real project directory when one exists (not the scratch dir) so they can actually read the project's files.
 
-**`PermissionTier` (`'read-only' | 'read-write' | 'full'`) is not a unified mechanism** — each of the three CLI executors (`packages/coding/src/executors/{claude-code-cli,openai-codex-cli,google-antigravity-cli}.ts`) translates it into a completely different concrete CLI mechanism (an `--allowedTools` allow-list, a `--sandbox` level, or a blanket `--dangerously-skip-permissions` flag). Don't try to unify this translation — it was deliberately left executor-specific (see the "Nicht Teil dieser Änderung" note in the policy-engine work) since the three CLIs genuinely don't share a vocabulary here.
+**`PermissionTier` (`'read-only' | 'read-write' | 'full'`) is not a unified mechanism** — each of the four CLI executors (`packages/coding/src/executors/{claude-code-cli,openai-codex-cli,google-antigravity-cli,grok-build-cli}.ts`) translates it into a completely different concrete CLI mechanism (an `--allowedTools` allow-list, a `--sandbox` level, or a blanket `--dangerously-skip-permissions` flag). Don't try to unify this translation — it was deliberately left executor-specific (see the "Nicht Teil dieser Änderung" note in the policy-engine work) since the CLIs genuinely don't share a vocabulary here.
 
 **Specs are event-sourced, task graphs are not.** `ProjectSpecification`/`ChangeRequest` are appended to a per-project event log (`apps/desktop/src/main/project-event-log.ts`, replayed via `replayProject`/`replayChangeRequests`) with a real version/supersede chain. `TaskGraphSnapshot` is replaced wholesale on regeneration — a deliberate simplicity choice (see the comment on `TaskGraphSnapshot` in `packages/project-domain/src/types.ts`), not an oversight; don't assume task-graph history is replayable the way spec history is.
 
