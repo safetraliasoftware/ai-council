@@ -63,6 +63,8 @@ Architektur und Konventionen: [`CLAUDE.md`](CLAUDE.md) · Entwicklerhinweise auc
 
 Fragen und Fehler: [info@safetralia.de](mailto:info@safetralia.de) · [Issues](https://github.com/safetraliasoftware/ai-council/issues)
 
+Sicherheitslücken bitte **nicht** öffentlich: [SECURITY.md](SECURITY.md) oder *Security → Report a vulnerability*.
+
 ## Lizenz
 
 © Safetralia Software. Noch keine offene Lizenz vergeben — Quellcode ist öffentlich einsehbar, aber nicht zur freien Weiterverwendung freigegeben.
