@@ -68,20 +68,41 @@ describe('toAgentCouncilParticipant', () => {
     expect(participant.backend).toBe('local_agent')
   })
 
-  it('lists attached inputFiles as absolute paths in the prompt and does not copy them into the working directory', async () => {
+  it('copies attachments from outside the working directory into a staging folder for local CLIs', async () => {
     let capturedSpec: CodingTaskSpec | undefined
-    const outside = join(dir, 'shot.png')
-    writeFileSync(outside, 'png')
+    const outsideDir = mkdtempSync(join(tmpdir(), 'ai-council-outside-'))
+    const outside = join(outsideDir, 'Bewerbung.pdf')
+    writeFileSync(outside, '%PDF-1.1')
+    const participant = toAgentCouncilParticipant('openai', fakeExecutor([{ type: 'done', summary: 'ok' }], (spec) => {
+      capturedSpec = spec
+    }), dir)
+    try {
+      for await (const _ of participant.generate({
+        messages: [{ role: 'user', content: 'Lies die Bewerbung.' }],
+        inputFiles: [{ filename: 'Bewerbung.pdf', mimeType: 'application/pdf', path: outside }]
+      })) { /* drain */ }
+      expect(capturedSpec?.prompt).toContain(join(dir, '.ai-council-attachments', 'openai', 'Bewerbung.pdf'))
+      expect(capturedSpec?.prompt).not.toContain(outside)
+      expect(capturedSpec?.prompt).toContain('nicht verändern')
+      expect(existsSync(join(dir, '.ai-council-attachments', 'openai'))).toBe(false)
+    } finally {
+      rmSync(outsideDir, { recursive: true, force: true })
+    }
+  })
+
+  it('leaves attachments that already live in the working directory in place', async () => {
+    let capturedSpec: CodingTaskSpec | undefined
+    const inside = join(dir, 'shot.png')
+    writeFileSync(inside, 'png')
     const participant = toAgentCouncilParticipant('anthropic', fakeExecutor([{ type: 'done', summary: 'ok' }], (spec) => {
       capturedSpec = spec
     }), dir)
     for await (const _ of participant.generate({
       messages: [{ role: 'user', content: 'Beschreibe das Bild.' }],
-      inputFiles: [{ filename: 'shot.png', mimeType: 'image/png', path: outside }]
+      inputFiles: [{ filename: 'shot.png', mimeType: 'image/png', path: inside }]
     })) { /* drain */ }
-    expect(capturedSpec?.prompt).toContain(outside)
-    expect(capturedSpec?.prompt).toContain('nicht verändern')
-    expect(capturedSpec?.workingDirectory).toBe(dir)
+    expect(capturedSpec?.prompt).toContain(inside)
+    expect(capturedSpec?.prompt).not.toContain('.ai-council-attachments')
   })
 
   it('always forces permissionTier to read-only, regardless of anything else', async () => {
@@ -122,20 +143,21 @@ describe('toAgentCouncilParticipant', () => {
     ])
   })
 
-  it('remaps file_change/command to warning and drops test_result', async () => {
+  it('remaps file_change to warning, drops command (Codex reads via sandbox shell) and test_result', async () => {
     const events = await collect(
-      'anthropic',
+      'openai',
       fakeExecutor([
         { type: 'file_change', path: 'src/x.ts', changeType: 'modified' },
-        { type: 'command', command: 'rm -rf x' },
+        { type: 'command', command: 'powershell.exe -Command python -' },
         { type: 'test_result', passed: true, summary: 'irrelevant' },
         { type: 'done', summary: 'ok' }
       ]),
       dir
     )
     const types = events.map((e) => e.type)
-    expect(types).toEqual(['warning', 'warning', 'done'])
+    expect(types).toEqual(['warning', 'done'])
     expect((events[0] as { message: string }).message).toContain('src/x.ts')
+    expect(JSON.stringify(events)).not.toContain('powershell')
   })
 
   it('creates the working directory if it does not exist yet', async () => {

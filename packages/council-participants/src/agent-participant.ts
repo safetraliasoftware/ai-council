@@ -1,4 +1,5 @@
-import { mkdir } from 'node:fs/promises'
+import { copyFile, mkdir, rm } from 'node:fs/promises'
+import { basename, join, resolve, sep } from 'node:path'
 import type { CouncilParticipant, CouncilParticipantEvent, InputFile, ProviderId } from '@ai-council/shared'
 import type { CodingExecutor, CodingExecutorEvent } from '@ai-council/coding'
 import { isGitRepo, snapshotWorkspace, verifyWorkspaceUnchanged } from '@ai-council/coding'
@@ -22,10 +23,13 @@ function mapExecutorEvent(
         message: `Council-Modus (Read-only erzwungen): unerwartete Dateiänderung beobachtet (${event.changeType}): ${event.path}`
       }
     case 'command':
-      return {
-        type: 'warning',
-        message: `Council-Modus (Read-only erzwungen): unerwarteter Befehl beobachtet: ${event.command}`
-      }
+      // Codex has no separate Read tool: it inspects files through its own
+      // read-only sandbox shell (see project-engine's reviewer note). A PDF
+      // in Downloads therefore shows up as powershell.exe + python, which
+      // used to surface as a red "unerwarteter Befehl" even though the
+      // sandbox already forbids writes. Mutation is caught by file_change
+      // and the git snapshot below, not by this event.
+      return undefined
     case 'test_result':
       // Not relevant to a council seat's advisory role, and no executor
       // emits it today (see packages/coding's contract doc comment).
@@ -75,7 +79,64 @@ const COUNCIL_READONLY_TOOLS = ['Read', 'Glob', 'Grep', 'WebSearch', 'WebFetch']
 export function appendInputFileInstructions(prompt: string, files: InputFile[] | undefined): string {
   if (!files || files.length === 0) return prompt
   const list = files.map((f) => `- ${f.path} (${f.filename}, ${f.mimeType})`).join('\n')
-  return `${prompt}\n\nAngehängte Dateien — bitte mit deinen Lese-Werkzeugen öffnen und nicht verändern:\n${list}`
+  return `${prompt}\n\nAngehängte Dateien — bitte mit Datei-Lese-Werkzeugen öffnen und nicht verändern:\n${list}`
+}
+
+const ATTACHMENT_STAGING = '.ai-council-attachments'
+
+function isInsideDirectory(root: string, target: string): boolean {
+  let resolvedRoot = resolve(root)
+  let resolvedTarget = resolve(target)
+  if (process.platform === 'win32') {
+    resolvedRoot = resolvedRoot.toLowerCase()
+    resolvedTarget = resolvedTarget.toLowerCase()
+  }
+  const prefix = resolvedRoot.endsWith(sep) ? resolvedRoot : resolvedRoot + sep
+  return resolvedTarget === resolvedRoot || resolvedTarget.startsWith(prefix)
+}
+
+function safeFileName(filename: string, used: Set<string>): string {
+  const base = basename(filename).replace(/[<>:"|?*\u0000-\u001f]/g, '_').trim() || 'datei'
+  let name = base
+  let n = 2
+  while (used.has(name.toLowerCase())) {
+    const dot = base.lastIndexOf('.')
+    name = dot > 0 ? `${base.slice(0, dot)}-${n}${base.slice(dot)}` : `${base}-${n}`
+    n++
+  }
+  used.add(name.toLowerCase())
+  return name
+}
+
+/**
+ * Copy attachments that live outside the working directory into a staging
+ * folder inside it. Compare/Council scratch is a git repo the CLIs trust;
+ * Antigravity/Claude only see that repo via --add-dir, so a PDF in
+ * Downloads is otherwise unreadable. Staging is excluded from the
+ * read-only fingerprint (see GENERATED_OUTPUT_EXCLUDES).
+ */
+async function stageInputFiles(
+  workingDirectory: string,
+  logicalProvider: ProviderId,
+  files: InputFile[] | undefined
+): Promise<{ files: InputFile[] | undefined; stagingDir?: string }> {
+  if (!files || files.length === 0) return { files }
+  const outside = files.filter((file) => !isInsideDirectory(workingDirectory, file.path))
+  if (outside.length === 0) return { files }
+  const stagingDir = join(workingDirectory, ATTACHMENT_STAGING, logicalProvider)
+  await mkdir(stagingDir, { recursive: true })
+  const used = new Set<string>()
+  const remapped = new Map<string, InputFile>()
+  for (const file of outside) {
+    const name = safeFileName(file.filename, used)
+    const dest = join(stagingDir, name)
+    await copyFile(file.path, dest)
+    remapped.set(resolve(file.path), { ...file, path: dest, filename: name })
+  }
+  return {
+    stagingDir,
+    files: files.map((file) => remapped.get(resolve(file.path)) ?? file)
+  }
 }
 
 /**
@@ -113,66 +174,73 @@ export function toAgentCouncilParticipant(
     capabilities: () => ({ streaming: true, tools: false, vision: true }),
     async *generate(request, options): AsyncGenerator<CouncilParticipantEvent> {
       await mkdir(workingDirectory, { recursive: true })
+      const staged = await stageInputFiles(workingDirectory, logicalProvider, request.inputFiles)
 
       const prompt = appendInputFileInstructions(
         request.systemInstructions
           ? `${request.systemInstructions}\n\n${request.messages.map((m) => m.content).join('\n\n')}`
           : request.messages.map((m) => m.content).join('\n\n'),
-        request.inputFiles
+        staged.files
       )
 
       const repoPresent = await isGitRepo(workingDirectory)
       const baseline = repoPresent ? await snapshotWorkspace(workingDirectory) : undefined
 
-      let handle: ReturnType<CodingExecutor['startTask']>
       try {
-        handle = executor.startTask(
-          { prompt, workingDirectory, permissionTier: 'read-only', allowedTools: COUNCIL_READONLY_TOOLS },
-          { signal: options?.signal }
-        )
-      } catch (err) {
-        // startTask() can throw synchronously before ever returning a
-        // handle - e.g. Antigravity's own prompt-length check (it has no
-        // stdin path, unlike Claude Code/Codex, so a long Council prompt
-        // hits Windows' command-line limit). Left uncaught, this escaped
-        // the whole generator and crashed the entire multi-agent Council
-        // merge for every participant, not just this one - caught live
-        // during a real taskgraph-generation run. A participant that can't
-        // even start must fail its own turn the same way a mid-stream
-        // executor error already does, not take the others down with it.
-        yield {
-          type: 'error',
-          error: { providerId: logicalProvider, code: 'unknown', message: err instanceof Error ? err.message : String(err), retryable: false }
+        let handle: ReturnType<CodingExecutor['startTask']>
+        try {
+          handle = executor.startTask(
+            { prompt, workingDirectory, permissionTier: 'read-only', allowedTools: COUNCIL_READONLY_TOOLS },
+            { signal: options?.signal }
+          )
+        } catch (err) {
+          // startTask() can throw synchronously before ever returning a
+          // handle - e.g. Antigravity's own prompt-length check (it has no
+          // stdin path, unlike Claude Code/Codex, so a long Council prompt
+          // hits Windows' command-line limit). Left uncaught, this escaped
+          // the whole generator and crashed the entire multi-agent Council
+          // merge for every participant, not just this one - caught live
+          // during a real taskgraph-generation run. A participant that can't
+          // even start must fail its own turn the same way a mid-stream
+          // executor error already does, not take the others down with it.
+          yield {
+            type: 'error',
+            error: { providerId: logicalProvider, code: 'unknown', message: err instanceof Error ? err.message : String(err), retryable: false }
+          }
+          return
         }
-        return
-      }
 
-      try {
-        for await (const event of handle.events) {
-          const mapped = mapExecutorEvent(logicalProvider, event)
-          if (mapped) yield mapped
-        }
-      } finally {
-        // Runs regardless of whether the loop above ended via `done` or
-        // `error` - a partial write before a failure must still be caught.
-        if (repoPresent && baseline) {
-          const decision = await verifyWorkspaceUnchanged(baseline, workingDirectory)
-          if (decision.outcome === 'deny') {
-            yield {
-              type: 'policy_violation',
-              message:
-                `COUNCIL_POLICY_VIOLATION: ${decision.reason} Diese Änderung wurde nicht übernommen - falls sie aus einer anderen, unabhängigen Quelle stammt (z. B. einem parallelen Build), ist das ein Fehlalarm, aber sie wird sicherheitshalber immer gemeldet.`
-            }
-          } else if (decision.toleratedTransient) {
-            // The run is allowed to proceed (the deviation was gone by the
-            // retry), but stay visible instead of vanishing silently - a
-            // write that self-reverts within the retry window is otherwise
-            // indistinguishable from a benign straggler.
-            yield {
-              type: 'warning',
-              message: `Vorübergehende Arbeitsverzeichnis-Abweichung toleriert (verschwand vor der Nachprüfung): ${decision.toleratedTransient}`
+        try {
+          for await (const event of handle.events) {
+            const mapped = mapExecutorEvent(logicalProvider, event)
+            if (mapped) yield mapped
+          }
+        } finally {
+          // Runs regardless of whether the loop above ended via `done` or
+          // `error` - a partial write before a failure must still be caught.
+          if (repoPresent && baseline) {
+            const decision = await verifyWorkspaceUnchanged(baseline, workingDirectory)
+            if (decision.outcome === 'deny') {
+              yield {
+                type: 'policy_violation',
+                message:
+                  `COUNCIL_POLICY_VIOLATION: ${decision.reason} Diese Änderung wurde nicht übernommen - falls sie aus einer anderen, unabhängigen Quelle stammt (z. B. einem parallelen Build), ist das ein Fehlalarm, aber sie wird sicherheitshalber immer gemeldet.`
+              }
+            } else if (decision.toleratedTransient) {
+              // The run is allowed to proceed (the deviation was gone by the
+              // retry), but stay visible instead of vanishing silently - a
+              // write that self-reverts within the retry window is otherwise
+              // indistinguishable from a benign straggler.
+              yield {
+                type: 'warning',
+                message: `Vorübergehende Arbeitsverzeichnis-Abweichung toleriert (verschwand vor der Nachprüfung): ${decision.toleratedTransient}`
+              }
             }
           }
+        }
+      } finally {
+        if (staged.stagingDir) {
+          await rm(staged.stagingDir, { recursive: true, force: true }).catch(() => undefined)
         }
       }
     }

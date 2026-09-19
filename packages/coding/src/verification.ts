@@ -64,7 +64,11 @@ export async function gitOutput(cwd: string, args: string[]): Promise<string> {
  */
 const GENERATED_OUTPUT_EXCLUDES = [
   'bin/', 'obj/', 'TestResults/', 'node_modules/', 'dist/', 'build/', '.next/', '.nuxt/',
-  'coverage/', '__pycache__/', '.venv/', 'venv/', '.pytest_cache/', 'target/', '.gradle/', '.cache/'
+  'coverage/', '__pycache__/', '.venv/', 'venv/', '.pytest_cache/', 'target/', '.gradle/', '.cache/',
+  // Staged Compare/Council attachments. Copied in so local CLIs can read a
+  // PDF that lives in Downloads; must not fingerprint as a workspace write
+  // when several seats copy in parallel.
+  '.ai-council-attachments/'
 ]
 
 /**
